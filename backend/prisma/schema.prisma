@@ -1,0 +1,175 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ================= ENUMS =================
+
+enum Role {
+  USER
+  ADMIN
+}
+
+enum Platform {
+  LICHESS
+  CHESSCOM
+}
+
+enum GameResult {
+  WHITE_WIN
+  BLACK_WIN
+  DRAW
+}
+
+enum GameFormat {
+  BULLET
+  BLITZ
+  RAPID
+  CLASSICAL
+  CORRESPONDENCE
+}
+
+enum GameMode {
+  RATED
+  CASUAL
+}
+
+enum Color {
+  WHITE
+  BLACK
+}
+
+enum MoveClassification {
+  BOOK
+  BEST
+  EXCELLENT
+  GOOD
+  INACCURACY
+  MISTAKE
+  BLUNDER
+  FORCED
+}
+
+// ================= MODELS =================
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  username     String   @unique
+  passwordHash String
+  role         Role     @default(USER)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  linkedAccounts LinkedAccount[]
+  games          Game[]
+
+  @@map("users")
+}
+
+model LinkedAccount {
+  id               String   @id @default(uuid())
+  userId           String
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  platform         Platform
+  platformUsername String
+  accessToken      String?
+  connectedAt      DateTime @default(now())
+
+  @@unique([userId, platform])
+  @@map("linked_accounts")
+}
+
+model Opening {
+  id   String @id @default(uuid())
+  eco  String @unique
+  name String
+
+  games Game[]
+
+  @@map("openings")
+}
+
+model Game {
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  platform   Platform
+  externalId String
+  pgn        String   @db.Text
+
+  whiteUsername String
+  blackUsername String
+  whiteElo      Int?
+  blackElo      Int?
+  result        GameResult
+
+  format      GameFormat
+  mode        GameMode   @default(RATED)
+  timeControl String?
+
+  openingId String?
+  opening   Opening? @relation(fields: [openingId], references: [id])
+
+  playedAt   DateTime
+  importedAt DateTime @default(now())
+
+  analysis Analysis?
+
+  @@unique([platform, externalId])
+  @@index([userId])
+  @@index([format])
+  @@index([mode])
+  @@index([openingId])
+  @@map("games")
+}
+
+model Analysis {
+  id     String @id @default(uuid())
+  gameId String @unique
+  game   Game   @relation(fields: [gameId], references: [id], onDelete: Cascade)
+
+  engine String @default("stockfish")
+  depth  Int    @default(18)
+
+  accuracyWhite Float?
+  accuracyBlack Float?
+
+  blunderCount    Int @default(0)
+  mistakeCount    Int @default(0)
+  inaccuracyCount Int @default(0)
+
+  createdAt DateTime @default(now())
+
+  moves MoveAnalysis[]
+
+  @@map("analyses")
+}
+
+model MoveAnalysis {
+  id         String   @id @default(uuid())
+  analysisId String
+  analysis   Analysis @relation(fields: [analysisId], references: [id], onDelete: Cascade)
+
+  moveNumber Int
+  color      Color
+  san        String
+  fenBefore  String
+  fenAfter   String
+
+  evalBeforeCp Int?
+  evalAfterCp  Int?
+  mateIn       Int?
+
+  bestMove       String?
+  classification MoveClassification
+
+  @@index([analysisId])
+  @@map("move_analyses")
+}
