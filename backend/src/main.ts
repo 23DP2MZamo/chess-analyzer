@@ -32,7 +32,7 @@ async function bootstrap() {
   app.use(passport.initialize());
   app.use(passport.session());
   (app.enableCors({
-    origin: 'http://localhost:4200', //POMENJACC PORT DLA CORS ORIGINA NA DEJSTVUJUSSIJ PORT PROJEKTA ESLI ETOT NE 4200
+    origin: 'http://localhost:5173', //POMENJACC PORT DLA CORS ORIGINA NA DEJSTVUJUSSIJ PORT PROJEKTA ESLI ETOT NE 4200
     credentials: true,
   }),
     await app.listen(3000));
