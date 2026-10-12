@@ -36,28 +36,15 @@ export default function AuthPage({
     <main className="relative min-h-screen overflow-hidden bg-[#202020] font-sans text-stone-100">
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_55%_35%_at_83%_3%,#75432180,transparent_65%)]" />
       <div className="relative mx-auto min-h-screen max-w-[1440px] border-x border-white/6">
-        <header className="flex h-12 items-center justify-between px-4 text-[10px] text-stone-400 sm:px-7">
+        <header className="flex h-12 items-center px-4 text-[10px] text-stone-400 sm:px-7">
           <Link
             className="inline-flex items-center gap-2 text-stone-300 no-underline transition hover:text-white"
-            to="/login"
+            to="/home"
             aria-label="Chess Analyzer sākumlapa"
           >
             <span className="text-base leading-none text-[#e47536]">♞</span>
             <span className="hidden sm:inline">Home</span>
           </Link>
-          <nav className="hidden items-center gap-6 sm:flex" aria-label="Galvenā navigācija">
-            <span>Lorem</span>
-            <span>Lorem</span>
-            <span>Lorem</span>
-            <span>Lorem</span>
-          </nav>
-          <button
-            className="grid size-7 place-items-center text-lg leading-none text-stone-300 sm:hidden"
-            type="button"
-            aria-label="Atvērt navigāciju"
-          >
-            <span>☰</span>
-          </button>
         </header>
 
         <section className="relative mx-auto grid min-h-[calc(100vh-48px)] w-full max-w-[1080px] items-center gap-12 px-6 py-12 sm:px-10 lg:grid-cols-[minmax(0,1fr)_420px] lg:gap-24 lg:px-0">
