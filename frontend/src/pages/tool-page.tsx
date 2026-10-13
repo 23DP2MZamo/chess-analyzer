@@ -27,8 +27,13 @@ export default function ToolPage() {
       <div className="max-w-2xl border-l border-[#bd5d2a]/70 pl-6">
         <p className="mb-5 text-[10px] tracking-[.2em] text-[#d47440]">{details.eyebrow}</p>
         <h1 className="text-5xl font-light tracking-[-.04em] sm:text-7xl">{details.title}</h1>
-        <p className="mt-6 max-w-md text-sm leading-relaxed text-[#858585]">{details.description}</p>
-        <Link className="mt-10 inline-block border border-white/20 px-5 py-3 text-xs tracking-[.1em] text-[#e8e5df] no-underline hover:border-white/50" to="/home">
+        <p className="mt-6 max-w-md text-sm leading-relaxed text-[#858585]">
+          {details.description}
+        </p>
+        <Link
+          className="mt-10 inline-block border border-white/20 px-5 py-3 text-xs tracking-[.1em] text-[#e8e5df] no-underline hover:border-white/50"
+          to="/home"
+        >
           Back to home
         </Link>
       </div>

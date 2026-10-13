@@ -48,9 +48,17 @@ export class GamesService {
       },
     });
     const wins = games.filter((game) =>
-      game.result === 'WHITE_WIN' ? game.whiteUsername : game.result === 'BLACK_WIN' ? game.blackUsername : false,
+      game.result === 'WHITE_WIN'
+        ? game.whiteUsername
+        : game.result === 'BLACK_WIN'
+          ? game.blackUsername
+          : false,
     );
-    const accuracyValues = games.flatMap((game) => [game.analysis?.accuracyWhite, game.analysis?.accuracyBlack].filter((value): value is number => value != null));
+    const accuracyValues = games.flatMap((game) =>
+      [game.analysis?.accuracyWhite, game.analysis?.accuracyBlack].filter(
+        (value): value is number => value != null,
+      ),
+    );
 
     return {
       totalGames: games.length,
@@ -58,7 +66,9 @@ export class GamesService {
       draws: games.filter((game) => game.result === 'DRAW').length,
       losses: games.length - wins.length - games.filter((game) => game.result === 'DRAW').length,
       winrate: games.length ? (wins.length / games.length) * 100 : 0,
-      averageAccuracy: accuracyValues.length ? accuracyValues.reduce((sum, value) => sum + value, 0) / accuracyValues.length : null,
+      averageAccuracy: accuracyValues.length
+        ? accuracyValues.reduce((sum, value) => sum + value, 0) / accuracyValues.length
+        : null,
     };
   }
 
