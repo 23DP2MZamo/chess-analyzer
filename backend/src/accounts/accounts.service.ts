@@ -12,6 +12,14 @@ export class AccountsService {
     private readonly chessComClient: ChessComClient,
   ) {}
 
+  listLinkedAccounts(userId: string) {
+    return this.prismaService.linkedAccount.findMany({
+      where: { userId },
+      orderBy: { connectedAt: 'asc' },
+      select: { id: true, platform: true, platformUsername: true, connectedAt: true },
+    });
+  }
+
   async linkLichessAccount(userId: string, username: string) {
     const platformUsername = username?.trim();
 

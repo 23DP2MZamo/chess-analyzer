@@ -13,6 +13,55 @@ export class GamesService {
     private readonly chessComClient: ChessComClient,
   ) {}
 
+  listGames(userId: string) {
+    return this.prismaService.game.findMany({
+      where: { userId },
+      orderBy: { playedAt: 'desc' },
+      take: 100,
+      select: {
+        id: true,
+        platform: true,
+        externalId: true,
+        whiteUsername: true,
+        blackUsername: true,
+        whiteElo: true,
+        blackElo: true,
+        result: true,
+        format: true,
+        mode: true,
+        timeControl: true,
+        playedAt: true,
+        opening: { select: { eco: true, name: true } },
+        analysis: { select: { accuracyWhite: true, accuracyBlack: true } },
+      },
+    });
+  }
+
+  async getStats(userId: string) {
+    const games = await this.prismaService.game.findMany({
+      where: { userId },
+      select: {
+        result: true,
+        whiteUsername: true,
+        blackUsername: true,
+        analysis: { select: { accuracyWhite: true, accuracyBlack: true } },
+      },
+    });
+    const wins = games.filter((game) =>
+      game.result === 'WHITE_WIN' ? game.whiteUsername : game.result === 'BLACK_WIN' ? game.blackUsername : false,
+    );
+    const accuracyValues = games.flatMap((game) => [game.analysis?.accuracyWhite, game.analysis?.accuracyBlack].filter((value): value is number => value != null));
+
+    return {
+      totalGames: games.length,
+      wins: wins.length,
+      draws: games.filter((game) => game.result === 'DRAW').length,
+      losses: games.length - wins.length - games.filter((game) => game.result === 'DRAW').length,
+      winrate: games.length ? (wins.length / games.length) * 100 : 0,
+      averageAccuracy: accuracyValues.length ? accuracyValues.reduce((sum, value) => sum + value, 0) / accuracyValues.length : null,
+    };
+  }
+
   async importChessComGames(userId: string): Promise<{ imported: number; skipped: number }> {
     const linkedAccount = await this.prismaService.linkedAccount.findFirst({
       where: { userId, platform: Platform.CHESSCOM },

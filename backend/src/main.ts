@@ -1,12 +1,13 @@
-import { config } from 'dotenv';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import session from 'express-session';
 import passport from 'passport';
 import connectPgSimple from 'connect-pg-simple';
 import 'dotenv/config';
+import { ValidationPipe } from '@nestjs/common';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+  app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
 
   const sessionSecret = process.env.SESSION_SECRET; //dobavic SESSION_SECRET TOKEN V .ENV tipa
   if (!sessionSecret) {
@@ -31,10 +32,10 @@ async function bootstrap() {
   );
   app.use(passport.initialize());
   app.use(passport.session());
-  (app.enableCors({
+  app.enableCors({
     origin: 'http://localhost:5173', //POMENJACC PORT DLA CORS ORIGINA NA DEJSTVUJUSSIJ PORT PROJEKTA ESLI ETOT NE 4200
     credentials: true,
-  }),
-    await app.listen(3000));
+  });
+  await app.listen(3000);
 }
-bootstrap();
+void bootstrap();

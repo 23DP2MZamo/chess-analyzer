@@ -103,12 +103,42 @@ describe('parsePgn', () => {
   });
 
   it.each([
-    ['[Result "1-0"]\n[TimeControl "60+0"]\n[Mode "rated"]', GameResult.WHITE_WIN, GameFormat.BULLET, GameMode.RATED],
-    ['[Result "0-1"]\n[TimeControl "300+2"]\n[Mode "casual"]', GameResult.BLACK_WIN, GameFormat.BLITZ, GameMode.CASUAL],
-    ['[Result "1/2-1/2"]\n[TimeControl "600"]\n[Rated "Rated"]', GameResult.DRAW, GameFormat.RAPID, GameMode.RATED],
-    ['[Result "*"]\n[TimeControl "900+10"]\n[Rated "Casual"]', GameResult.DRAW, GameFormat.RAPID, GameMode.CASUAL],
-    ['[Result "1-0"]\n[TimeControl "1800+30"]', GameResult.WHITE_WIN, GameFormat.CLASSICAL, GameMode.RATED],
-    ['[Result "0-1"]\n[TimeControl "40/7200:3600"]', GameResult.BLACK_WIN, GameFormat.CLASSICAL, GameMode.RATED],
+    [
+      '[Result "1-0"]\n[TimeControl "60+0"]\n[Mode "rated"]',
+      GameResult.WHITE_WIN,
+      GameFormat.BULLET,
+      GameMode.RATED,
+    ],
+    [
+      '[Result "0-1"]\n[TimeControl "300+2"]\n[Mode "casual"]',
+      GameResult.BLACK_WIN,
+      GameFormat.BLITZ,
+      GameMode.CASUAL,
+    ],
+    [
+      '[Result "1/2-1/2"]\n[TimeControl "600"]\n[Rated "Rated"]',
+      GameResult.DRAW,
+      GameFormat.RAPID,
+      GameMode.RATED,
+    ],
+    [
+      '[Result "*"]\n[TimeControl "900+10"]\n[Rated "Casual"]',
+      GameResult.DRAW,
+      GameFormat.RAPID,
+      GameMode.CASUAL,
+    ],
+    [
+      '[Result "1-0"]\n[TimeControl "1800+30"]',
+      GameResult.WHITE_WIN,
+      GameFormat.CLASSICAL,
+      GameMode.RATED,
+    ],
+    [
+      '[Result "0-1"]\n[TimeControl "40/7200:3600"]',
+      GameResult.BLACK_WIN,
+      GameFormat.CLASSICAL,
+      GameMode.RATED,
+    ],
   ])('maps PGN headers (%s)', (pgn, result, format, mode) => {
     expect(parsePgn(pgn)).toMatchObject({
       result,

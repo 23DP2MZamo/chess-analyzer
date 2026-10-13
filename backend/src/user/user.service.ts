@@ -1,12 +1,12 @@
-import { BadRequestException, Inject, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { PrismaService } from '../prisma/prisma.service';
 import * as bcrypt from 'bcrypt';
 @Injectable()
 export class UserService {
-    constructor(private prismaService: PrismaService) {}
-async create(createUserDto: CreateUserDto) {
+  constructor(private prismaService: PrismaService) {}
+  async create(createUserDto: CreateUserDto) {
     const username = createUserDto.username.trim();
 
     const email = createUserDto.email.trim().toLowerCase();
@@ -38,14 +38,14 @@ async create(createUserDto: CreateUserDto) {
       },
     });
   }
-   findByUsernameOrEmail(identifier: string) {
+  findByUsernameOrEmail(identifier: string) {
     return this.prismaService.user.findFirst({
       where: {
         OR: [{ email: identifier }, { username: identifier }],
       },
     });
   }
-    findById(id: string) {
+  findById(id: string) {
     return this.prismaService.user.findUnique({
       where: {
         id,
@@ -66,8 +66,37 @@ async create(createUserDto: CreateUserDto) {
     return `This action returns a #${id} user`;
   }
 
-  update(id: number, updateUserDto: UpdateUserDto) {
-    return `This action updates a #${id} user`;
+  async update(id: string, updateUserDto: UpdateUserDto) {
+    const username = updateUserDto.username?.trim();
+    const email = updateUserDto.email?.trim().toLowerCase();
+    const existing = await this.prismaService.user.findUnique({ where: { id } });
+    if (!existing) throw new NotFoundException('User not found');
+
+    if (username || email) {
+      const duplicate = await this.prismaService.user.findFirst({
+        where: {
+          id: { not: id },
+          OR: [...(username ? [{ username }] : []), ...(email ? [{ email }] : [])],
+        },
+        select: { username: true, email: true },
+      });
+      if (duplicate) {
+        throw new BadRequestException(
+          duplicate.username === username
+            ? 'Username was already taken'
+            : 'Email was already taken',
+        );
+      }
+    }
+
+    const passwordHash = updateUserDto.password
+      ? await bcrypt.hash(updateUserDto.password, 10)
+      : undefined;
+    return this.prismaService.user.update({
+      where: { id },
+      data: { username, email, passwordHash },
+      select: { id: true, username: true, email: true, role: true },
+    });
   }
 
   remove(id: number) {

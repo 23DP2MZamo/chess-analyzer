@@ -76,7 +76,9 @@ function mapFormat(timeControl: string | null, timeClass: string | undefined): G
 
 function getBaseSeconds(timeControl: string): number | null {
   const firstStage = timeControl.split(':', 1)[0];
-  const baseValue = firstStage.includes('/') ? firstStage.split('/').pop() : firstStage.split('+')[0];
+  const baseValue = firstStage.includes('/')
+    ? firstStage.split('/').pop()
+    : firstStage.split('+')[0];
   const baseSeconds = Number(baseValue);
   return Number.isFinite(baseSeconds) && baseSeconds >= 0 ? baseSeconds : null;
 }

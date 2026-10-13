@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Get,
   Post,
   Request,
   UseGuards,
@@ -19,6 +20,12 @@ interface AuthenticatedRequest {
 @Controller('accounts')
 export class AccountsController {
   constructor(private readonly accountsService: AccountsService) {}
+
+  @Get()
+  @UseGuards(SessionAuthGuard)
+  listLinkedAccounts(@Request() request: AuthenticatedRequest) {
+    return this.accountsService.listLinkedAccounts(request.user.id);
+  }
 
   @Post('lichess')
   @UseGuards(SessionAuthGuard)

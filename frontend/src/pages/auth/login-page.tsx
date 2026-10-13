@@ -22,7 +22,7 @@ export default function LoginPage() {
     setError('');
     try {
       await api('/auth/signin', { method: 'POST', body: JSON.stringify({ identifier, password }) });
-      navigate('/home');
+      navigate('/profile');
     } catch (caughtError) {
       setError(
         caughtError instanceof ApiError

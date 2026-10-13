@@ -14,6 +14,7 @@ import { AccountsService } from './accounts.service';
 describe('AccountsController', () => {
   let app: INestApplication<App>;
   const accountsService = {
+    listLinkedAccounts: jest.fn(),
     linkLichessAccount: jest.fn(),
     linkChessComAccount: jest.fn(),
   };
