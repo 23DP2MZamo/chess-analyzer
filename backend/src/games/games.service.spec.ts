@@ -8,8 +8,8 @@ import { GamesService } from './games.service';
 describe('GamesService', () => {
   let service: GamesService;
   let prismaService: {
-    linkedAccount: { findFirst: jest.Mock };
-    game: { createMany: jest.Mock };
+    linkedAccount: { findFirst: jest.Mock; findMany: jest.Mock };
+    game: { createMany: jest.Mock; findMany: jest.Mock };
   };
   let chessComClient: {
     getGameArchives: jest.Mock;
@@ -44,8 +44,8 @@ describe('GamesService', () => {
 
   beforeEach(() => {
     prismaService = {
-      linkedAccount: { findFirst: jest.fn() },
-      game: { createMany: jest.fn() },
+      linkedAccount: { findFirst: jest.fn(), findMany: jest.fn() },
+      game: { createMany: jest.fn(), findMany: jest.fn() },
     };
     chessComClient = {
       getGameArchives: jest.fn(),
@@ -207,5 +207,56 @@ describe('GamesService', () => {
     );
     expect(lichessClient.getUserGames).not.toHaveBeenCalled();
     expect(prismaService.game.createMany).not.toHaveBeenCalled();
+  });
+
+  it('counts wins only when the linked account played the winning color', async () => {
+    prismaService.linkedAccount.findMany.mockResolvedValue([
+      { platform: Platform.CHESSCOM, platformUsername: 'Hikaru' },
+      { platform: Platform.LICHESS, platformUsername: 'RealLichessUser' },
+    ]);
+    prismaService.game.findMany.mockResolvedValue([
+      {
+        platform: Platform.CHESSCOM,
+        result: 'BLACK_WIN',
+        whiteUsername: 'Hikaru',
+        blackUsername: 'Opponent',
+        analysis: null,
+      },
+      {
+        platform: Platform.LICHESS,
+        result: 'WHITE_WIN',
+        whiteUsername: 'Opponent',
+        blackUsername: 'reallichessuser',
+        analysis: null,
+      },
+      {
+        platform: Platform.LICHESS,
+        result: 'BLACK_WIN',
+        whiteUsername: 'Opponent',
+        blackUsername: 'RealLichessUser',
+        analysis: null,
+      },
+      {
+        platform: Platform.CHESSCOM,
+        result: 'DRAW',
+        whiteUsername: 'Hikaru',
+        blackUsername: 'Opponent',
+        analysis: null,
+      },
+    ]);
+
+    await expect(service.getStats('user-id')).resolves.toEqual({
+      totalGames: 4,
+      wins: 1,
+      draws: 1,
+      losses: 2,
+      winrate: 25,
+      averageAccuracy: null,
+    });
+
+    expect(prismaService.linkedAccount.findMany).toHaveBeenCalledWith({
+      where: { userId: 'user-id' },
+      select: { platform: true, platformUsername: true },
+    });
   });
 });

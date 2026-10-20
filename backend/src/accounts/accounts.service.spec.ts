@@ -125,6 +125,26 @@ describe('AccountsService', () => {
     expect(prismaService.linkedAccount.create).not.toHaveBeenCalled();
   });
 
+  it('does not create a record when Chess.com is unavailable', async () => {
+    chessComClient.verifyAccount.mockRejectedValue(
+      new BadGatewayException('Unable to verify the Chess.com account'),
+    );
+
+    await expect(service.linkChessComAccount('user-id', 'Hikaru')).rejects.toBeInstanceOf(
+      BadGatewayException,
+    );
+    expect(prismaService.linkedAccount.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects blank Chess.com usernames before calling the public API', async () => {
+    await expect(service.linkChessComAccount('user-id', '   ')).rejects.toMatchObject({
+      status: 400,
+    });
+
+    expect(chessComClient.verifyAccount).not.toHaveBeenCalled();
+    expect(prismaService.linkedAccount.create).not.toHaveBeenCalled();
+  });
+
   it('converts a Chess.com unique constraint violation to a conflict response', async () => {
     prismaService.linkedAccount.create.mockRejectedValue(
       new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {

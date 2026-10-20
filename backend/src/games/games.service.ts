@@ -42,21 +42,31 @@ export class GamesService {
   }
 
   async getStats(userId: string) {
-    const games = await this.prismaService.game.findMany({
-      where: { userId },
-      select: {
-        result: true,
-        whiteUsername: true,
-        blackUsername: true,
-        analysis: { select: { accuracyWhite: true, accuracyBlack: true } },
-      },
-    });
-    const wins = games.filter((game) =>
-      game.result === 'WHITE_WIN'
-        ? game.whiteUsername
-        : game.result === 'BLACK_WIN'
-          ? game.blackUsername
-          : false,
+    const [games, linkedAccounts] = await Promise.all([
+      this.prismaService.game.findMany({
+        where: { userId },
+        select: {
+          platform: true,
+          result: true,
+          whiteUsername: true,
+          blackUsername: true,
+          analysis: { select: { accuracyWhite: true, accuracyBlack: true } },
+        },
+      }),
+      this.prismaService.linkedAccount.findMany({
+        where: { userId },
+        select: { platform: true, platformUsername: true },
+      }),
+    ]);
+    const linkedUsernames = new Map(
+      linkedAccounts.map((account) => [account.platform, account.platformUsername.toLowerCase()]),
+    );
+    const isLinkedPlayer = (platform: Platform, username: string) =>
+      linkedUsernames.get(platform) === username.toLowerCase();
+    const wins = games.filter(
+      (game) =>
+        (game.result === 'WHITE_WIN' && isLinkedPlayer(game.platform, game.whiteUsername)) ||
+        (game.result === 'BLACK_WIN' && isLinkedPlayer(game.platform, game.blackUsername)),
     );
     const accuracyValues = games.flatMap((game) =>
       [game.analysis?.accuracyWhite, game.analysis?.accuracyBlack].filter(
