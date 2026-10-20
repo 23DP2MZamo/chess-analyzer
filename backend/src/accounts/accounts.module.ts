@@ -7,6 +7,6 @@ import { LichessClient } from './lichess.client';
 @Module({
   controllers: [AccountsController],
   providers: [AccountsService, LichessClient, ChessComClient],
-  exports: [ChessComClient],
+  exports: [ChessComClient, LichessClient],
 })
 export class AccountsModule {}

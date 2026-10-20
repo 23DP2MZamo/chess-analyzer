@@ -14,10 +14,13 @@ async function bootstrap() {
     throw new Error('SESSION_SECRET is not defined in environment variables');
   }
 
-  const pgSession = connectPgSimple(session);
+  const createPgSessionStore = connectPgSimple as unknown as (
+    sessionFactory: typeof session,
+  ) => new (options: { createTableIfMissing: boolean }) => session.Store;
+  const PgSessionStore = createPgSessionStore(session);
   app.use(
     session({
-      store: new pgSession({
+      store: new PgSessionStore({
         createTableIfMissing: true,
       }),
       secret: sessionSecret,

@@ -20,6 +20,7 @@ describe('parsePgn', () => {
         format: GameFormat.BULLET,
         mode: GameMode.RATED,
         timeControl: '60+0',
+        eco: null,
       },
     },
     {
@@ -39,6 +40,7 @@ describe('parsePgn', () => {
         format: GameFormat.BLITZ,
         mode: GameMode.RATED,
         timeControl: '180+2',
+        eco: null,
       },
     },
     {
@@ -58,6 +60,7 @@ describe('parsePgn', () => {
         format: GameFormat.RAPID,
         mode: GameMode.RATED,
         timeControl: '600+0',
+        eco: null,
       },
     },
     {
@@ -77,6 +80,7 @@ describe('parsePgn', () => {
         format: GameFormat.CLASSICAL,
         mode: GameMode.RATED,
         timeControl: '1800+0',
+        eco: null,
       },
     },
   ];
@@ -99,6 +103,7 @@ describe('parsePgn', () => {
       format: GameFormat.CLASSICAL,
       mode: GameMode.RATED,
       timeControl: null,
+      eco: null,
     });
   });
 
@@ -139,14 +144,18 @@ describe('parsePgn', () => {
       GameFormat.CLASSICAL,
       GameMode.RATED,
     ],
-  ])('maps PGN headers (%s)', (pgn, result, format, mode) => {
-    expect(parsePgn(pgn)).toMatchObject({
-      result,
-      format,
-      mode,
-      timeControl: expect.any(String),
-    });
-  });
+  ] as [string, GameResult, GameFormat, GameMode][])(
+    'maps PGN headers (%s)',
+    (pgn, result, format, mode) => {
+      const parsed = parsePgn(pgn);
+      expect(parsed).toMatchObject({
+        result,
+        format,
+        mode,
+      });
+      expect(parsed.timeControl).toEqual(expect.any(String));
+    },
+  );
 
   it('uses TimeClass when TimeControl is missing and tolerates escaped header values', () => {
     expect(parsePgn('[Event "Training \\"game\\""]\n[TimeClass "bullet"]')).toEqual({
@@ -154,6 +163,7 @@ describe('parsePgn', () => {
       format: GameFormat.BULLET,
       mode: GameMode.RATED,
       timeControl: null,
+      eco: null,
     });
   });
 });

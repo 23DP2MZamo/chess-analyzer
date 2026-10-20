@@ -2,6 +2,7 @@ import {
   ConflictException,
   ExecutionContext,
   INestApplication,
+  BadGatewayException,
   NotFoundException,
 } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
@@ -125,6 +126,17 @@ describe('AccountsController', () => {
       .post('/accounts/chesscom')
       .send({ username: 'missing-user' })
       .expect(404);
+  });
+
+  it('returns 502 when the Chess.com API is unavailable', async () => {
+    accountsService.linkChessComAccount.mockRejectedValue(
+      new BadGatewayException('Unable to verify the Chess.com account'),
+    );
+
+    await request(app.getHttpServer())
+      .post('/accounts/chesscom')
+      .send({ username: 'Hikaru' })
+      .expect(502);
   });
 
   it('returns 409 when a Chess.com account is already linked', async () => {

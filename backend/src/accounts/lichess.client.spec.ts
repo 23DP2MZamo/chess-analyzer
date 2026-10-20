@@ -48,4 +48,46 @@ describe('LichessClient', () => {
       BadGatewayException,
     );
   });
+
+  it('fetches and parses Lichess NDJSON games with pagination parameters', async () => {
+    const game = {
+      id: 'game-id',
+      pgn: '[Result "1-0"]',
+      createdAt: 1_700_000_000_000,
+      rated: true,
+      speed: 'blitz',
+      winner: 'white',
+      players: {
+        white: { user: { name: 'WhitePlayer' }, rating: 1800 },
+        black: { user: { name: 'BlackPlayer' }, rating: 1700 },
+      },
+    };
+    fetchMock.mockResolvedValue(
+      new Response(`${JSON.stringify(game)}\n`, {
+        status: 200,
+        headers: { 'Content-Type': 'application/x-ndjson' },
+      }),
+    );
+
+    await expect(client.getUserGames('some user', 1_700_000_000_000)).resolves.toEqual([game]);
+
+    const [url, options] = fetchMock.mock.calls[0];
+    expect(url).toBe(
+      'https://lichess.org/api/games/user/some%20user?max=300&pgnInJson=true&until=1700000000000',
+    );
+    expect(options?.headers).toEqual({ Accept: 'application/x-ndjson' });
+    expect(options?.signal).toBeInstanceOf(AbortSignal);
+  });
+
+  it('returns an empty list when the Lichess account has no games', async () => {
+    fetchMock.mockResolvedValue(new Response('\n', { status: 200 }));
+
+    await expect(client.getUserGames('someUser')).resolves.toEqual([]);
+  });
+
+  it('rejects malformed Lichess game history', async () => {
+    fetchMock.mockResolvedValue(new Response('not-json\n', { status: 200 }));
+
+    await expect(client.getUserGames('someUser')).rejects.toBeInstanceOf(BadGatewayException);
+  });
 });

@@ -1,0 +1,170 @@
+{
+  "info": {
+    "_postman_id": "7e193bb8-9a52-47a2-9c94-59ce3164d05f",
+    "name": "Chess Analyzer - Lichess integration",
+    "description": "Tests Lichess account linking, game-history import and persistence in the shared games table. Set the collection variables before running.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000"
+    },
+    {
+      "key": "identifier",
+      "value": ""
+    },
+    {
+      "key": "password",
+      "value": ""
+    },
+    {
+      "key": "lichessUsername",
+      "value": ""
+    },
+    {
+      "key": "imported",
+      "value": "0"
+    },
+    {
+      "key": "skipped",
+      "value": "0"
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Sign in",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"identifier\": \"{{identifier}}\",\n  \"password\": \"{{password}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": "{{baseUrl}}/auth/signin"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Sign-in succeeds and establishes a session', function () {",
+              "    pm.response.to.have.status(200);",
+              "    pm.expect(pm.cookies.has('connect.sid')).to.be.true;",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Link Lichess account",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"username\": \"{{lichessUsername}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": "{{baseUrl}}/accounts/lichess"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Lichess account is verified and linked', function () {",
+              "    pm.response.to.have.status(201);",
+              "    const account = pm.response.json();",
+              "    pm.expect(account.platform).to.eql('LICHESS');",
+              "    pm.expect(account.platformUsername.toLowerCase()).to.eql(pm.collectionVariables.get('lichessUsername').toLowerCase());",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Import Lichess games",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/games/lichess/import"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Lichess games are imported or correctly skipped', function () {",
+              "    pm.response.to.have.status(201);",
+              "    const result = pm.response.json();",
+              "    pm.expect(result.imported).to.be.a('number');",
+              "    pm.expect(result.skipped).to.be.a('number');",
+              "    pm.expect(result.imported).to.be.at.least(0);",
+              "    pm.expect(result.skipped).to.be.at.least(0);",
+              "    pm.collectionVariables.set('imported', String(result.imported));",
+              "    pm.collectionVariables.set('skipped', String(result.skipped));",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. Verify games are persisted",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/games"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Imported Lichess games are present in the shared games table', function () {",
+              "    pm.response.to.have.status(200);",
+              "    const games = pm.response.json();",
+              "    pm.expect(games).to.be.an('array');",
+              "    const lichessGames = games.filter(function (game) { return game.platform === 'LICHESS'; });",
+              "    const imported = Number(pm.collectionVariables.get('imported'));",
+              "    const skipped = Number(pm.collectionVariables.get('skipped'));",
+              "    pm.expect(imported + skipped, 'the Lichess account should have public games').to.be.greaterThan(0);",
+              "    pm.expect(lichessGames.length, 'at least one Lichess game should be returned').to.be.greaterThan(0);",
+              "    lichessGames.forEach(function (game) {",
+              "        pm.expect(game.externalId).to.be.a('string').and.not.empty;",
+              "        pm.expect(game.whiteUsername).to.be.a('string').and.not.empty;",
+              "        pm.expect(game.blackUsername).to.be.a('string').and.not.empty;",
+              "        pm.expect(game.playedAt).to.be.a('string').and.not.empty;",
+              "    });",
+              "});"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

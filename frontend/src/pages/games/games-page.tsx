@@ -27,7 +27,7 @@ function resultLabel(result: string) {
 export default function GamesPage() {
   const [games, setGames] = useState<Game[]>([]);
   const [loading, setLoading] = useState(true);
-  const [importing, setImporting] = useState(false);
+  const [importing, setImporting] = useState<'CHESSCOM' | 'LICHESS' | null>(null);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
 
@@ -61,20 +61,21 @@ export default function GamesPage() {
     };
   }, []);
 
-  async function importChessComGames() {
-    setImporting(true);
+  async function importGames(platform: 'CHESSCOM' | 'LICHESS') {
+    setImporting(platform);
     setError('');
     setMessage('');
     try {
-      const result = await api<{ imported: number; skipped: number }>('/games/chesscom/import', {
-        method: 'POST',
-      });
+      const result = await api<{ imported: number; skipped: number }>(
+        `/games/${platform === 'CHESSCOM' ? 'chesscom' : 'lichess'}/import`,
+        { method: 'POST' },
+      );
       setMessage(`${result.imported} games imported, ${result.skipped} already existed.`);
       await loadGames(true);
     } catch (caughtError) {
       setError(caughtError instanceof ApiError ? caughtError.message : 'Could not import games.');
     } finally {
-      setImporting(false);
+      setImporting(null);
     }
   }
 
@@ -91,14 +92,22 @@ export default function GamesPage() {
           <p className="mt-8 text-[10px] tracking-[.2em] text-[#d47440]">GAME HISTORY</p>
           <h1 className="mt-3 text-5xl font-light tracking-[-.04em] sm:text-7xl">Your games</h1>
         </div>
-        <button
-          className="h-11 border border-[#c56531] bg-[#a94e22] px-5 text-xs tracking-[.08em] text-white transition hover:bg-[#c25d2a] disabled:cursor-wait disabled:opacity-50"
-          type="button"
-          onClick={importChessComGames}
-          disabled={importing}
-        >
-          {importing ? 'Importing...' : 'Import Chess.com games'}
-        </button>
+        <div className="flex flex-wrap gap-3">
+          {(['CHESSCOM', 'LICHESS'] as const).map((platform) => {
+            const name = platform === 'CHESSCOM' ? 'Chess.com' : 'Lichess';
+            return (
+              <button
+                className="h-11 border border-[#c56531] bg-[#a94e22] px-5 text-xs tracking-[.08em] text-white transition hover:bg-[#c25d2a] disabled:cursor-wait disabled:opacity-50"
+                type="button"
+                key={platform}
+                onClick={() => importGames(platform)}
+                disabled={importing !== null}
+              >
+                {importing === platform ? 'Importing...' : `Import ${name} games`}
+              </button>
+            );
+          })}
+        </div>
       </div>
       {error && (
         <p
@@ -124,7 +133,7 @@ export default function GamesPage() {
         <div className="border border-white/10 bg-white/[.025] px-6 py-16 text-center">
           <p className="text-lg text-[#ddd]">No games yet</p>
           <p className="mt-3 text-sm text-[#777]">
-            Link a Chess.com account and import your game history.
+            Link a Chess.com or Lichess account and import your game history.
           </p>
           <Link
             className="mt-6 inline-block text-xs tracking-[.1em] text-[#d47440] no-underline hover:text-white"
