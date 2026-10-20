@@ -74,7 +74,7 @@ describe('GamesService', () => {
     expect(prismaService.game.createMany).not.toHaveBeenCalled();
   });
 
-  it('repeated imports skip games already present in the shared table', async () => {
+  it('repeated imports skip games already imported for the same user', async () => {
     prismaService.linkedAccount.findFirst.mockResolvedValue({ platformUsername: 'Hikaru' });
     chessComClient.getGameArchives.mockResolvedValue({ archives: ['archive-url'] });
     chessComClient.getArchiveGames.mockResolvedValue({ games: [chessGame] });
@@ -96,5 +96,28 @@ describe('GamesService', () => {
       2,
       expect.objectContaining({ skipDuplicates: true }),
     );
+  });
+
+  it('fetches archive games in bounded batches', async () => {
+    let activeRequests = 0;
+    let maxActiveRequests = 0;
+    const archives = Array.from({ length: 12 }, (_, index) => `archive-${index}`);
+    prismaService.linkedAccount.findFirst.mockResolvedValue({ platformUsername: 'Hikaru' });
+    chessComClient.getGameArchives.mockResolvedValue({ archives });
+    chessComClient.getArchiveGames.mockImplementation(async () => {
+      activeRequests += 1;
+      maxActiveRequests = Math.max(maxActiveRequests, activeRequests);
+      await Promise.resolve();
+      activeRequests -= 1;
+      return { games: [] };
+    });
+
+    await expect(service.importChessComGames('user-id')).resolves.toEqual({
+      imported: 0,
+      skipped: 0,
+    });
+
+    expect(chessComClient.getArchiveGames).toHaveBeenCalledTimes(archives.length);
+    expect(maxActiveRequests).toBe(5);
   });
 });

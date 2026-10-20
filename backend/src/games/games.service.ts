@@ -1,10 +1,11 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { Platform } from '../../generated/prisma/client';
-import { ChessComClient } from '../accounts/chesscom.client';
+import { ChessComClient, type ChessComArchiveResponse } from '../accounts/chesscom.client';
 import { PrismaService } from '../prisma/prisma.service';
 import { mapChessComGame } from './chesscom-game.mapper';
 
 const INSERT_BATCH_SIZE = 100;
+const ARCHIVE_FETCH_BATCH_SIZE = 5;
 
 @Injectable()
 export class GamesService {
@@ -82,9 +83,15 @@ export class GamesService {
     }
 
     const { archives } = await this.chessComClient.getGameArchives(linkedAccount.platformUsername);
-    const archiveResponses = await Promise.all(
-      archives.map((archiveUrl) => this.chessComClient.getArchiveGames(archiveUrl)),
-    );
+    const archiveResponses: ChessComArchiveResponse[] = [];
+    for (let offset = 0; offset < archives.length; offset += ARCHIVE_FETCH_BATCH_SIZE) {
+      const batch = await Promise.all(
+        archives
+          .slice(offset, offset + ARCHIVE_FETCH_BATCH_SIZE)
+          .map((archiveUrl) => this.chessComClient.getArchiveGames(archiveUrl)),
+      );
+      archiveResponses.push(...batch);
+    }
     const games = archiveResponses.flatMap((archive) => archive.games);
     let imported = 0;
 
