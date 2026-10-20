@@ -1,8 +1,10 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadGatewayException, Injectable, NotFoundException } from '@nestjs/common';
 import { Platform } from '../../generated/prisma/client';
 import { ChessComClient, type ChessComArchiveResponse } from '../accounts/chesscom.client';
+import { LICHESS_GAMES_PAGE_SIZE, LichessClient } from '../accounts/lichess.client';
 import { PrismaService } from '../prisma/prisma.service';
 import { mapChessComGame } from './chesscom-game.mapper';
+import { mapLichessGame } from './lichess-game.mapper';
 
 const INSERT_BATCH_SIZE = 100;
 const ARCHIVE_FETCH_BATCH_SIZE = 5;
@@ -12,6 +14,7 @@ export class GamesService {
   constructor(
     private readonly prismaService: PrismaService,
     private readonly chessComClient: ChessComClient,
+    private readonly lichessClient: LichessClient,
   ) {}
 
   listGames(userId: string) {
@@ -104,5 +107,48 @@ export class GamesService {
     }
 
     return { imported, skipped: games.length - imported };
+  }
+
+  async importLichessGames(userId: string): Promise<{ imported: number; skipped: number }> {
+    const linkedAccount = await this.prismaService.linkedAccount.findFirst({
+      where: { userId, platform: Platform.LICHESS },
+    });
+
+    if (!linkedAccount) {
+      throw new NotFoundException('No Lichess account is linked');
+    }
+
+    let imported = 0;
+    let skipped = 0;
+    let until: number | undefined;
+
+    while (true) {
+      const games = await this.lichessClient.getUserGames(linkedAccount.platformUsername, until);
+      for (let offset = 0; offset < games.length; offset += INSERT_BATCH_SIZE) {
+        const data = games
+          .slice(offset, offset + INSERT_BATCH_SIZE)
+          .map((game) => mapLichessGame(userId, game));
+        const result = await this.prismaService.game.createMany({ data, skipDuplicates: true });
+        imported += result.count;
+        skipped += data.length - result.count;
+      }
+
+      if (games.length < LICHESS_GAMES_PAGE_SIZE) {
+        break;
+      }
+
+      const oldestGameTime = Math.min(...games.map((game) => game.createdAt));
+      const nextUntil = oldestGameTime - 1;
+      if (
+        !Number.isFinite(oldestGameTime) ||
+        nextUntil < 0 ||
+        (until !== undefined && nextUntil >= until)
+      ) {
+        throw new BadGatewayException('Lichess game history pagination did not advance');
+      }
+      until = nextUntil;
+    }
+
+    return { imported, skipped };
   }
 }

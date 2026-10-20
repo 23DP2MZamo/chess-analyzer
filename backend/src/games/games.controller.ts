@@ -27,4 +27,10 @@ export class GamesController {
   importChessComGames(@Request() request: AuthenticatedRequest) {
     return this.gamesService.importChessComGames(request.user.id);
   }
+
+  @Post('lichess/import')
+  @UseGuards(SessionAuthGuard)
+  importLichessGames(@Request() request: AuthenticatedRequest) {
+    return this.gamesService.importLichessGames(request.user.id);
+  }
 }

@@ -10,6 +10,7 @@ describe('GamesController', () => {
   let app: INestApplication<App>;
   const gamesService = {
     importChessComGames: jest.fn(),
+    importLichessGames: jest.fn(),
   };
 
   beforeEach(async () => {
@@ -45,5 +46,16 @@ describe('GamesController', () => {
       .expect({ imported: 15, skipped: 3 });
 
     expect(gamesService.importChessComGames).toHaveBeenCalledWith('session-user-id');
+  });
+
+  it('imports Lichess games for the authenticated session user', async () => {
+    gamesService.importLichessGames.mockResolvedValue({ imported: 12, skipped: 2 });
+
+    await request(app.getHttpServer())
+      .post('/games/lichess/import')
+      .expect(201)
+      .expect({ imported: 12, skipped: 2 });
+
+    expect(gamesService.importLichessGames).toHaveBeenCalledWith('session-user-id');
   });
 });
