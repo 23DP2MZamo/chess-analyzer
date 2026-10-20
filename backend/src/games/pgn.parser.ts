@@ -5,6 +5,7 @@ export interface ParsedPgnGameFields {
   format: GameFormat;
   mode: GameMode;
   timeControl: string | null;
+  eco: string | null;
 }
 
 export function parsePgn(pgn: string): ParsedPgnGameFields {
@@ -16,6 +17,7 @@ export function parsePgn(pgn: string): ParsedPgnGameFields {
     format: mapFormat(timeControl, headers.TimeClass),
     mode: mapMode(headers.Mode, headers.Rated),
     timeControl,
+    eco: headers.ECO?.trim().toUpperCase() || null,
   };
 }
 
