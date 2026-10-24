@@ -1,10 +1,12 @@
 import { useState, type FormEvent } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { loginDestination } from '../../lib/login-destination';
 import { api, ApiError } from '../../lib/api';
 import AuthPage, { authInputClass, authLabelClass } from './auth-page';
 
 export default function LoginPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState('');
 
@@ -22,7 +24,7 @@ export default function LoginPage() {
     setError('');
     try {
       await api('/auth/signin', { method: 'POST', body: JSON.stringify({ identifier, password }) });
-      navigate('/profile');
+      navigate(loginDestination(location.search), { replace: true });
     } catch (caughtError) {
       setError(
         caughtError instanceof ApiError
@@ -44,7 +46,7 @@ export default function LoginPage() {
       pending={pending}
       error={error}
       footerText="Vēl nav konta?"
-      footerLink="/signup"
+      footerLink={'/signup' + location.search}
       footerLabel="Izveidot kontu"
     >
       <label className={authLabelClass}>

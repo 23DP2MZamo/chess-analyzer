@@ -1,15 +1,17 @@
-import { Module } from '@nestjs/common';
+import { Global, Module } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
 import { PrismaModule } from '../prisma/prisma.module';
 import { PassportModule } from '@nestjs/passport';
 import { UserService } from '../user/user.service';
 import { LocalStrategy } from './strategies/local.strategy';
-import { SessionSerializer } from './serializer/session.serializer';
+import { JwtTokens } from './jwt-tokens.service';
 
+@Global()
 @Module({
-  imports: [PrismaModule, PassportModule.register({ session: true })],
+  imports: [PrismaModule, PassportModule.register({ session: false })],
   controllers: [AuthController],
-  providers: [AuthService, UserService, LocalStrategy, SessionSerializer],
+  providers: [AuthService, UserService, LocalStrategy, JwtTokens],
+  exports: [JwtTokens],
 })
 export class AuthModule {}
