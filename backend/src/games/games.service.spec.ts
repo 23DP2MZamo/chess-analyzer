@@ -1,5 +1,5 @@
 import { NotFoundException } from '@nestjs/common';
-import { Platform } from '../../generated/prisma/client';
+import { Platform, Prisma } from '../../generated/prisma/client';
 import { ChessComClient } from '../accounts/chesscom.client';
 import { LichessClient } from '../accounts/lichess.client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -9,7 +9,7 @@ describe('GamesService', () => {
   let service: GamesService;
   let prismaService: {
     linkedAccount: { findFirst: jest.Mock; findMany: jest.Mock };
-    game: { createMany: jest.Mock; findMany: jest.Mock };
+    game: { createMany: jest.Mock; findMany: jest.Mock; upsert: jest.Mock; findUnique: jest.Mock };
   };
   let chessComClient: {
     getGameArchives: jest.Mock;
@@ -45,7 +45,12 @@ describe('GamesService', () => {
   beforeEach(() => {
     prismaService = {
       linkedAccount: { findFirst: jest.fn(), findMany: jest.fn() },
-      game: { createMany: jest.fn(), findMany: jest.fn() },
+      game: {
+        createMany: jest.fn(),
+        findMany: jest.fn(),
+        upsert: jest.fn(),
+        findUnique: jest.fn(),
+      },
     };
     prismaService.game.findMany.mockResolvedValue([]);
     chessComClient = {
@@ -143,27 +148,110 @@ describe('GamesService', () => {
     expect(maxActiveRequests).toBe(5);
   });
 
-  it('imports only the requested latest games for the authenticated user', async () => {
+  it('imports only the requested latest games with the correct user and compound key', async () => {
     prismaService.linkedAccount.findFirst.mockResolvedValue({
       platformUsername: 'realLichessUser',
     });
     lichessClient.getUserGames.mockResolvedValue([lichessGame]);
-    prismaService.game.createMany.mockResolvedValue({ count: 1 });
+    prismaService.game.upsert.mockImplementation(({ create }: { create: { id: string } }) => ({
+      id: create.id,
+    }));
     await expect(service.importLichessGames('authenticated-user-id', 25)).resolves.toEqual({
       imported: 1,
       skipped: 0,
     });
     expect(lichessClient.getUserGames).toHaveBeenCalledWith('realLichessUser', undefined, 25);
-    expect(prismaService.game.createMany).toHaveBeenCalledWith({
-      data: [
-        expect.objectContaining({
+    expect(prismaService.game.upsert).toHaveBeenCalledWith({
+      where: {
+        userId_platform_externalId: {
           userId: 'authenticated-user-id',
           platform: Platform.LICHESS,
-          externalId: 'lichess-game-id',
-        }),
-      ],
-      skipDuplicates: true,
+          externalId: lichessGame.id,
+        },
+      },
+      create: expect.objectContaining({
+        userId: 'authenticated-user-id',
+        platform: Platform.LICHESS,
+        externalId: lichessGame.id,
+      }) as unknown,
+      update: {},
+      select: { id: true },
     });
+  });
+
+  it('repeated Lichess imports preserve saved records and allow the same game for another user', async () => {
+    const records = new Map<string, { id: string }>();
+    prismaService.linkedAccount.findFirst.mockResolvedValue({
+      platformUsername: 'realLichessUser',
+    });
+    lichessClient.getUserGames.mockResolvedValue([lichessGame, lichessGame]);
+    prismaService.game.upsert.mockImplementation(
+      ({
+        where,
+        create,
+      }: {
+        where: { userId_platform_externalId: { userId: string; externalId: string } };
+        create: { id: string };
+      }) => {
+        const key = JSON.stringify(where);
+        if (!records.has(key)) records.set(key, { id: create.id });
+        return records.get(key);
+      },
+    );
+    expect(await service.importLichessGames('user-a')).toEqual({ imported: 1, skipped: 1 });
+    expect(await service.importLichessGames('user-a')).toEqual({ imported: 0, skipped: 2 });
+    expect(await service.importLichessGames('user-b')).toEqual({ imported: 1, skipped: 1 });
+    expect(records.size).toBe(2);
+  });
+
+  it('treats a concurrent unique-key race as an existing game', async () => {
+    prismaService.linkedAccount.findFirst.mockResolvedValue({
+      platformUsername: 'realLichessUser',
+    });
+    lichessClient.getUserGames.mockResolvedValue([lichessGame]);
+    prismaService.game.upsert.mockRejectedValue(
+      new Prisma.PrismaClientKnownRequestError('duplicate', { code: 'P2002', clientVersion: '7' }),
+    );
+    prismaService.game.findUnique.mockResolvedValue({ id: 'already-saved' });
+    expect(await service.importLichessGames('user')).toEqual({ imported: 0, skipped: 1 });
+  });
+
+  it('validates limits before contacting Lichess', async () => {
+    for (const limit of [0, -1, 301, 1.5, NaN]) {
+      await expect(service.importLichessGames('user', limit)).rejects.toMatchObject({
+        status: 400,
+      });
+    }
+    expect(lichessClient.getUserGames).not.toHaveBeenCalled();
+  });
+
+  it('propagates upstream errors without writes and releases its import lock', async () => {
+    prismaService.linkedAccount.findFirst.mockResolvedValue({
+      platformUsername: 'realLichessUser',
+    });
+    lichessClient.getUserGames
+      .mockRejectedValueOnce(new Error('rate limited'))
+      .mockResolvedValueOnce([]);
+    await expect(service.importLichessGames('user')).rejects.toThrow('rate limited');
+    expect(prismaService.game.upsert).not.toHaveBeenCalled();
+    expect(await service.importLichessGames('user')).toEqual({ imported: 0, skipped: 0 });
+  });
+
+  it('prevents overlapping imports for the same user', async () => {
+    let complete!: (value: unknown[]) => void;
+    prismaService.linkedAccount.findFirst.mockResolvedValue({
+      platformUsername: 'realLichessUser',
+    });
+    lichessClient.getUserGames.mockReturnValue(
+      new Promise((resolve) => {
+        complete = resolve;
+      }),
+    );
+    const first = service.importLichessGames('user');
+    await Promise.resolve();
+    await expect(service.importLichessGames('user')).rejects.toMatchObject({ status: 409 });
+    complete([]);
+    await first;
   });
 
   it('returns not found if the authenticated user has no linked Lichess account', async () => {
