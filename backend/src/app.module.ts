@@ -1,3 +1,4 @@
+import { AnalysisModule } from './analysis/analysis.module';
 import { Module } from '@nestjs/common';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -8,7 +9,7 @@ import { GamesModule } from './games/games.module';
 import { OpeningsModule } from './openings/openings.module';
 
 @Module({
-  imports: [AuthModule, UserModule, AccountsModule, GamesModule, OpeningsModule],
+  imports: [AuthModule, UserModule, AccountsModule, GamesModule, OpeningsModule, AnalysisModule],
   controllers: [AppController],
   providers: [AppService],
 })

@@ -9,6 +9,7 @@ async function bootstrap() {
     throw new Error('JWT_SECRET or SESSION_SECRET must be configured');
   }
   const app = await NestFactory.create(AppModule);
+  app.enableShutdownHooks();
   app.useGlobalPipes(
     new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }),
   );
