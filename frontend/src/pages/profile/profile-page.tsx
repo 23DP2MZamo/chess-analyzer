@@ -25,6 +25,10 @@ type FormValues = {
 const emptyForm: FormValues = { username: '', email: '', password: '' };
 
 function validate(values: FormValues) {
+  if (values.username.trim().length > 50) return 'Lietotājvārdam jābūt līdz 50 rakstzīmēm.';
+  if (values.email.trim().length > 254) return 'E-pasta adrese ir pārāk gara.';
+  if (new TextEncoder().encode(values.password).length > 72)
+    return 'Parolei jābūt līdz 72 baitiem.';
   if (values.username.trim().length < 3) return 'Lietotājvārdam jābūt vismaz 3 rakstzīmes garam.';
   if (!/^\S+@\S+\.\S+$/.test(values.email.trim())) return 'Ievadiet derīgu e-pasta adresi.';
   if (values.password && values.password.length < 7)
@@ -37,6 +41,9 @@ export default function ProfilePage() {
   const [saved, setSaved] = useState<FormValues>(emptyForm);
   const [loading, setLoading] = useState(true);
   const [pending, setPending] = useState(false);
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [reload, setReload] = useState(0);
+  const [accountsLoading, setAccountsLoading] = useState(true);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [linkedAccounts, setLinkedAccounts] = useState<LinkedAccount[]>([]);
@@ -51,6 +58,7 @@ export default function ProfilePage() {
     api<Profile>('/user/me')
       .then((profile) => {
         if (!active) return;
+        setProfile(profile);
         const values = { username: profile.username, email: profile.email, password: '' };
         setForm(values);
         setSaved(values);
@@ -68,18 +76,28 @@ export default function ProfilePage() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [reload]);
 
   useEffect(() => {
+    let active = true;
     api<LinkedAccount[]>('/accounts')
-      .then(setLinkedAccounts)
+      .then((accounts) => {
+        if (active) setLinkedAccounts(accounts);
+      })
       .catch((caughtError) => {
+        if (!active) return;
         setAccountError(
           caughtError instanceof ApiError
             ? caughtError.message
             : 'Neizdevās ielādēt piesaistītos kontus.',
         );
+      })
+      .finally(() => {
+        if (active) setAccountsLoading(false);
       });
+    return () => {
+      active = false;
+    };
   }, []);
 
   const dirty =
@@ -94,6 +112,7 @@ export default function ProfilePage() {
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (pending || loading || !profile) return;
     if (!dirty || validationError) {
       setError(validationError || 'Nav neizmainītu datu, ko saglabāt.');
       return;
@@ -112,6 +131,7 @@ export default function ProfilePage() {
         }),
       });
       const values = { username: updated.username, email: updated.email, password: '' };
+      setProfile(updated);
       setForm(values);
       setSaved(values);
       setSuccess('Profils ir veiksmīgi atjaunināts.');
@@ -126,6 +146,7 @@ export default function ProfilePage() {
 
   async function handleLinkAccount(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (accountPending || accountsLoading || !profile) return;
     const username = accountUsername.trim();
     if (!username) {
       setAccountError('Ievadiet ārējās platformas lietotājvārdu.');
@@ -185,66 +206,94 @@ export default function ProfilePage() {
             <p className="py-12 text-center text-sm text-stone-500" role="status">
               Ielādējam profilu...
             </p>
-          ) : (
-            <form className="grid gap-5" onSubmit={handleSubmit} noValidate>
-              <label className="grid gap-2 text-sm text-stone-300">
-                Lietotājvārds
-                <input
-                  className="min-h-12 rounded-md border border-white/10 bg-black/15 px-4 text-stone-100 outline-none focus:border-[#bd5d2a]"
-                  value={form.username}
-                  onChange={(event) => updateField('username', event.target.value)}
-                  minLength={3}
-                  required
-                />
-              </label>
-              <label className="grid gap-2 text-sm text-stone-300">
-                E-pasts
-                <input
-                  className="min-h-12 rounded-md border border-white/10 bg-black/15 px-4 text-stone-100 outline-none focus:border-[#bd5d2a]"
-                  type="email"
-                  value={form.email}
-                  onChange={(event) => updateField('email', event.target.value)}
-                  required
-                />
-              </label>
-              <label className="grid gap-2 text-sm text-stone-300">
-                Jauna parole{' '}
-                <span className="text-xs text-stone-500">Atstājiet tukšu, lai nemainītu</span>
-                <input
-                  className="min-h-12 rounded-md border border-white/10 bg-black/15 px-4 text-stone-100 outline-none focus:border-[#bd5d2a]"
-                  type="password"
-                  value={form.password}
-                  onChange={(event) => updateField('password', event.target.value)}
-                  minLength={7}
-                  autoComplete="new-password"
-                />
-              </label>
-              {error && (
-                <p
-                  className="border border-red-400/30 bg-red-950/30 px-3 py-2.5 text-[13px] text-red-200"
-                  role="alert"
-                >
-                  {error}
-                </p>
-              )}
-              {success && (
-                <p
-                  className="border border-emerald-400/30 bg-emerald-950/30 px-3 py-2.5 text-[13px] text-emerald-200"
-                  role="status"
-                >
-                  {success}
-                </p>
-              )}
+          ) : !profile ? (
+            <div className="grid gap-4 py-8">
+              <p className="text-sm text-red-200" role="alert">
+                {error}
+              </p>
+              <Link to="/login" className="text-sm text-[#d47440]">
+                Pieslēgties
+              </Link>
               <button
-                className="min-h-12 border border-[#c56531] bg-[#a94e22] px-5 text-sm font-medium text-white transition hover:bg-[#c25d2a] disabled:cursor-not-allowed disabled:opacity-50"
-                type="submit"
-                disabled={pending || !dirty || Boolean(validationError)}
+                type="button"
+                onClick={() => {
+                  setLoading(true);
+                  setError('');
+                  setReload((value) => value + 1);
+                }}
+                className="min-h-12 border border-white/20 px-4"
               >
-                {pending ? 'Saglabā...' : 'Saglabāt izmaiņas'}{' '}
-                <span className="ml-3 text-lg font-light" aria-hidden="true">
-                  →
-                </span>
+                Mēģināt vēlreiz
               </button>
+            </div>
+          ) : (
+            <form className="grid gap-5" onSubmit={handleSubmit} noValidate aria-busy={pending}>
+              <p className="text-xs text-stone-400">Loma: {profile.role}</p>
+              <fieldset disabled={pending} className="grid min-w-0 gap-5">
+                <label className="grid gap-2 text-sm text-stone-300">
+                  Lietotājvārds
+                  <input
+                    className="min-h-12 rounded-md border border-white/10 bg-black/15 px-4 text-stone-100 outline-none focus:border-[#bd5d2a]"
+                    value={form.username}
+                    onChange={(event) => updateField('username', event.target.value)}
+                    minLength={3}
+                    required
+                  />
+                </label>
+                <label className="grid gap-2 text-sm text-stone-300">
+                  E-pasts
+                  <input
+                    className="min-h-12 rounded-md border border-white/10 bg-black/15 px-4 text-stone-100 outline-none focus:border-[#bd5d2a]"
+                    type="email"
+                    value={form.email}
+                    onChange={(event) => updateField('email', event.target.value)}
+                    required
+                  />
+                </label>
+                <label className="grid gap-2 text-sm text-stone-300">
+                  Jauna parole{' '}
+                  <span className="text-xs text-stone-500">Atstājiet tukšu, lai nemainītu</span>
+                  <input
+                    className="min-h-12 rounded-md border border-white/10 bg-black/15 px-4 text-stone-100 outline-none focus:border-[#bd5d2a]"
+                    type="password"
+                    value={form.password}
+                    onChange={(event) => updateField('password', event.target.value)}
+                    minLength={7}
+                    autoComplete="new-password"
+                  />
+                </label>
+                {dirty && validationError && (
+                  <p id="profile-validation" className="text-sm text-red-200" role="alert">
+                    {validationError}
+                  </p>
+                )}
+                {error && (
+                  <p
+                    className="border border-red-400/30 bg-red-950/30 px-3 py-2.5 text-[13px] text-red-200"
+                    role="alert"
+                  >
+                    {error}
+                  </p>
+                )}
+                {success && (
+                  <p
+                    className="border border-emerald-400/30 bg-emerald-950/30 px-3 py-2.5 text-[13px] text-emerald-200"
+                    role="status"
+                  >
+                    {success}
+                  </p>
+                )}
+                <button
+                  className="min-h-12 border border-[#c56531] bg-[#a94e22] px-5 text-sm font-medium text-white transition hover:bg-[#c25d2a] disabled:cursor-not-allowed disabled:opacity-50"
+                  type="submit"
+                  disabled={pending || !dirty || Boolean(validationError)}
+                >
+                  {pending ? 'Saglabā...' : 'Saglabāt izmaiņas'}{' '}
+                  <span className="ml-3 text-lg font-light" aria-hidden="true">
+                    →
+                  </span>
+                </button>
+              </fieldset>
             </form>
           )}
         </div>
@@ -257,7 +306,11 @@ export default function ProfilePage() {
           </div>
           <div className="grid gap-8 lg:grid-cols-[1fr_1.2fr]">
             <div className="grid gap-3">
-              {linkedAccounts.length === 0 ? (
+              {accountsLoading ? (
+                <p className="text-sm text-stone-500" role="status">
+                  Ielādējam piesaistītos kontus...
+                </p>
+              ) : linkedAccounts.length === 0 ? (
                 <p className="text-sm text-stone-500">Nav piesaistītu ārējo kontu.</p>
               ) : (
                 linkedAccounts.map((account) => (
@@ -283,6 +336,7 @@ export default function ProfilePage() {
                     className={`flex-1 border px-3 py-3 text-xs ${accountPlatform === platform ? 'border-[#bd5d2a] text-white' : 'border-white/10 text-stone-500'}`}
                     key={platform}
                     type="button"
+                    disabled={accountPending || !profile}
                     onClick={() => setAccountPlatform(platform)}
                   >
                     {platform === 'CHESSCOM' ? 'Chess.com' : 'Lichess'}
@@ -293,6 +347,8 @@ export default function ProfilePage() {
                 className="min-h-12 rounded-md border border-white/10 bg-black/15 px-4 text-stone-100 outline-none focus:border-[#bd5d2a]"
                 value={accountUsername}
                 onChange={(event) => setAccountUsername(event.target.value)}
+                aria-label="Platformas lietotājvārds"
+                disabled={accountPending || accountsLoading || !profile}
                 placeholder="Platform username"
               />
               {accountError && (
@@ -308,7 +364,7 @@ export default function ProfilePage() {
               <button
                 className="min-h-12 border border-[#c56531] bg-[#a94e22] px-5 text-sm text-white disabled:opacity-50"
                 type="submit"
-                disabled={accountPending}
+                disabled={accountPending || accountsLoading || !profile || !accountUsername.trim()}
               >
                 {accountPending ? 'Checking...' : 'Connect account'}
               </button>

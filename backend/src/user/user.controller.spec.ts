@@ -100,4 +100,31 @@ describe('Profile and JWT role authorization', () => {
       .send({ username: 'Changed' })
       .expect(403);
   });
+  it('validates and normalizes profile fields before saving the authenticated user', async () => {
+    const token = tokens.issue('user-id');
+    await request(app.getHttpServer())
+      .patch('/user/me')
+      .auth(token, { type: 'bearer' })
+      .send({ username: '  NewPlayer  ', email: ' NEW@example.com ' })
+      .expect(200);
+    expect(users.update).toHaveBeenCalledWith(
+      'user-id',
+      expect.objectContaining({ username: 'NewPlayer', email: 'new@example.com' }),
+    );
+    for (const body of [
+      { username: '   ' },
+      { email: 'bad' },
+      { password: 'short' },
+      { role: 'ADMIN' },
+      { username: null },
+      { email: null },
+      { password: null },
+    ]) {
+      await request(app.getHttpServer())
+        .patch('/user/me')
+        .auth(token, { type: 'bearer' })
+        .send(body)
+        .expect(400);
+    }
+  });
 });

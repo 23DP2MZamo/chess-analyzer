@@ -9,8 +9,9 @@ import { PrismaService } from '../src/prisma/prisma.service';
 import { GamesService } from '../src/games/games.service';
 import { LichessClient } from '../src/accounts/lichess.client';
 import { ChessComClient } from '../src/accounts/chesscom.client';
+import { UserService } from '../src/user/user.service';
 
-describe('PostgreSQL import duplicate prevention', () => {
+describe('PostgreSQL profile and duplicate prevention', () => {
   const schema = 'test_features_' + randomUUID().replaceAll('-', '');
   const sql = new Client({ connectionString: process.env.DATABASE_URL });
   const db = new PrismaClient({
@@ -38,7 +39,7 @@ describe('PostgreSQL import duplicate prevention', () => {
     await sql.end();
   });
 
-  it('deduplicates games separately for each owner', async () => {
+  it('persists a profile and deduplicates games separately for each owner', async () => {
     const ids: string[] = [];
     let reachedEnd = false;
     try {
@@ -85,6 +86,15 @@ describe('PostgreSQL import duplicate prevention', () => {
           expect(await tx.game.count({ where: { userId: { in: ids } } })).toBe(2);
           for (const userId of ids) expect(await tx.game.count({ where: { userId } })).toBe(1);
 
+          const profiles = new UserService(tx as unknown as PrismaService);
+          await profiles.update(ids[0], {
+            username: 'updated-' + ids[0],
+            email: 'updated-' + ids[0] + '@example.com',
+          });
+          expect(await profiles.findById(ids[0])).toMatchObject({
+            username: 'updated-' + ids[0],
+            email: 'updated-' + ids[0] + '@example.com',
+          });
           reachedEnd = true;
           throw rollback;
         },
