@@ -143,22 +143,17 @@ describe('GamesService', () => {
     expect(maxActiveRequests).toBe(5);
   });
 
-  it('imports Lichess games and saves them in the shared games table', async () => {
+  it('imports only the requested latest games for the authenticated user', async () => {
     prismaService.linkedAccount.findFirst.mockResolvedValue({
       platformUsername: 'realLichessUser',
     });
     lichessClient.getUserGames.mockResolvedValue([lichessGame]);
     prismaService.game.createMany.mockResolvedValue({ count: 1 });
-
-    await expect(service.importLichessGames('authenticated-user-id')).resolves.toEqual({
+    await expect(service.importLichessGames('authenticated-user-id', 25)).resolves.toEqual({
       imported: 1,
       skipped: 0,
     });
-
-    expect(prismaService.linkedAccount.findFirst).toHaveBeenCalledWith({
-      where: { userId: 'authenticated-user-id', platform: Platform.LICHESS },
-    });
-    expect(lichessClient.getUserGames).toHaveBeenCalledWith('realLichessUser', undefined);
+    expect(lichessClient.getUserGames).toHaveBeenCalledWith('realLichessUser', undefined, 25);
     expect(prismaService.game.createMany).toHaveBeenCalledWith({
       data: [
         expect.objectContaining({
@@ -169,35 +164,6 @@ describe('GamesService', () => {
       ],
       skipDuplicates: true,
     });
-  });
-
-  it('fetches older Lichess game pages until the full history is imported', async () => {
-    const page = Array.from({ length: 300 }, (_, index) => ({
-      ...lichessGame,
-      id: `game-${index}`,
-      createdAt: 1_700_000_000_000 - index,
-    }));
-    prismaService.linkedAccount.findFirst.mockResolvedValue({
-      platformUsername: 'realLichessUser',
-    });
-    lichessClient.getUserGames
-      .mockResolvedValueOnce(page)
-      .mockResolvedValueOnce([{ ...lichessGame, id: 'older-game', createdAt: 1_699_000_000_000 }]);
-    prismaService.game.createMany.mockImplementation((args: { data: unknown[] }) => ({
-      count: args.data.length,
-    }));
-
-    await expect(service.importLichessGames('user-id')).resolves.toEqual({
-      imported: 301,
-      skipped: 0,
-    });
-
-    expect(lichessClient.getUserGames).toHaveBeenNthCalledWith(1, 'realLichessUser', undefined);
-    expect(lichessClient.getUserGames).toHaveBeenNthCalledWith(
-      2,
-      'realLichessUser',
-      Math.min(...page.map((game) => game.createdAt)) - 1,
-    );
   });
 
   it('returns not found if the authenticated user has no linked Lichess account', async () => {

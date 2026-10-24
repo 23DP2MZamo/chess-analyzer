@@ -56,6 +56,16 @@ describe('GamesController', () => {
       .expect(201)
       .expect({ imported: 12, skipped: 2 });
 
-    expect(gamesService.importLichessGames).toHaveBeenCalledWith('session-user-id');
+    expect(gamesService.importLichessGames).toHaveBeenCalledWith('session-user-id', 100);
+  });
+
+  it('rejects invalid limits and accepts a bounded limit', async () => {
+    for (const limit of [0, 301, 1.5, '10'])
+      await request(app.getHttpServer()).post('/games/lichess/import').send({ limit }).expect(400);
+    await request(app.getHttpServer())
+      .post('/games/lichess/import')
+      .send({ limit: 25 })
+      .expect(201);
+    expect(gamesService.importLichessGames).toHaveBeenCalledWith('session-user-id', 25);
   });
 });

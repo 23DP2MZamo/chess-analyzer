@@ -29,6 +29,11 @@ export default function GamesPage() {
   const [loading, setLoading] = useState(true);
   const [importing, setImporting] = useState<'CHESSCOM' | 'LICHESS' | null>(null);
   const [message, setMessage] = useState('');
+  const [lichessLimit, setLichessLimit] = useState('100');
+  const validLimit =
+    Number.isInteger(Number(lichessLimit)) &&
+    Number(lichessLimit) >= 1 &&
+    Number(lichessLimit) <= 300;
   const [error, setError] = useState('');
 
   async function loadGames(showLoading = false) {
@@ -62,13 +67,19 @@ export default function GamesPage() {
   }, []);
 
   async function importGames(platform: 'CHESSCOM' | 'LICHESS') {
+    if (importing || (platform === 'LICHESS' && !validLimit)) return;
     setImporting(platform);
     setError('');
     setMessage('');
     try {
       const result = await api<{ imported: number; skipped: number }>(
         `/games/${platform === 'CHESSCOM' ? 'chesscom' : 'lichess'}/import`,
-        { method: 'POST' },
+        {
+          method: 'POST',
+          ...(platform === 'LICHESS'
+            ? { body: JSON.stringify({ limit: Number(lichessLimit) }) }
+            : {}),
+        },
       );
       setMessage(`${result.imported} games imported, ${result.skipped} already existed.`);
       await loadGames(true);
@@ -92,7 +103,21 @@ export default function GamesPage() {
           <p className="mt-8 text-[10px] tracking-[.2em] text-[#d47440]">GAME HISTORY</p>
           <h1 className="mt-3 text-5xl font-light tracking-[-.04em] sm:text-7xl">Your games</h1>
         </div>
-        <div className="flex flex-wrap gap-3">
+        <div className="flex flex-wrap items-end gap-3">
+          <label className="grid gap-1 text-xs text-[#aaa]">
+            Latest Lichess games (1–300)
+            <input
+              aria-label="Lichess game limit"
+              type="number"
+              min={1}
+              max={300}
+              step={1}
+              value={lichessLimit}
+              onChange={(event) => setLichessLimit(event.target.value)}
+              disabled={importing !== null}
+              className="h-11 w-32 border border-white/20 bg-[#202020] px-3 text-white"
+            />
+          </label>
           {(['CHESSCOM', 'LICHESS'] as const).map((platform) => {
             const name = platform === 'CHESSCOM' ? 'Chess.com' : 'Lichess';
             return (
@@ -101,7 +126,7 @@ export default function GamesPage() {
                 type="button"
                 key={platform}
                 onClick={() => importGames(platform)}
-                disabled={importing !== null}
+                disabled={importing !== null || (platform === 'LICHESS' && !validLimit)}
               >
                 {importing === platform ? 'Importing...' : `Import ${name} games`}
               </button>

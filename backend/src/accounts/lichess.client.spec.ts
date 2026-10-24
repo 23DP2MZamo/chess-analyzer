@@ -73,10 +73,31 @@ describe('LichessClient', () => {
 
     const [url, options] = fetchMock.mock.calls[0];
     expect(url).toBe(
-      'https://lichess.org/api/games/user/some%20user?max=300&pgnInJson=true&until=1700000000000',
+      'https://lichess.org/api/games/user/some%20user?max=300&sort=dateDesc&ongoing=false&finished=true&pgnInJson=true&until=1700000000000',
     );
     expect(options?.headers).toEqual({ Accept: 'application/x-ndjson' });
     expect(options?.signal).toBeInstanceOf(AbortSignal);
+  });
+
+  it('handles HTTP 429 with retry information instead of retrying in a loop', async () => {
+    fetchMock.mockResolvedValue(
+      new Response(null, { status: 429, headers: { 'Retry-After': '120' } }),
+    );
+    try {
+      await client.getUserGames('someUser', undefined, 25);
+      throw new Error('Expected a rate-limit error');
+    } catch (error) {
+      expect(error).toMatchObject({ status: 429 });
+      expect((error as { getResponse(): unknown }).getResponse()).toMatchObject({
+        retryAfter: 120,
+      });
+    }
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('handles a game export timeout', async () => {
+    fetchMock.mockRejectedValue(new Error('timeout'));
+    await expect(client.getUserGames('someUser')).rejects.toBeInstanceOf(BadGatewayException);
   });
 
   it('returns an empty list when the Lichess account has no games', async () => {
