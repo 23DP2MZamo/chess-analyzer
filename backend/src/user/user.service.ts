@@ -1,8 +1,14 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { PrismaService } from '../prisma/prisma.service';
 import * as bcrypt from 'bcrypt';
+import { Prisma } from '../../generated/prisma/client';
 @Injectable()
 export class UserService {
   constructor(private prismaService: PrismaService) {}
@@ -45,8 +51,8 @@ export class UserService {
       },
     });
   }
-  findById(id: string) {
-    return this.prismaService.user.findUnique({
+  async findById(id: string) {
+    const user = await this.prismaService.user.findUnique({
       where: {
         id,
       },
@@ -57,9 +63,13 @@ export class UserService {
         role: true,
       },
     });
+    if (!user) throw new NotFoundException('User not found');
+    return user;
   }
   findAll() {
-    return `This action returns all user`;
+    return this.prismaService.user.findMany({
+      select: { id: true, username: true, email: true, role: true },
+    });
   }
 
   findOne(id: number) {
@@ -67,6 +77,10 @@ export class UserService {
   }
 
   async update(id: string, updateUserDto: UpdateUserDto) {
+    if (Object.keys(updateUserDto).length === 0)
+      throw new BadRequestException('No changes submitted');
+    if (updateUserDto.password && Buffer.byteLength(updateUserDto.password, 'utf8') > 72)
+      throw new BadRequestException('Password must be at most 72 bytes');
     const username = updateUserDto.username?.trim();
     const email = updateUserDto.email?.trim().toLowerCase();
     const existing = await this.prismaService.user.findUnique({ where: { id } });
@@ -92,11 +106,18 @@ export class UserService {
     const passwordHash = updateUserDto.password
       ? await bcrypt.hash(updateUserDto.password, 10)
       : undefined;
-    return this.prismaService.user.update({
-      where: { id },
-      data: { username, email, passwordHash },
-      select: { id: true, username: true, email: true, role: true },
-    });
+    try {
+      return await this.prismaService.user.update({
+        where: { id },
+        data: { username, email, passwordHash },
+        select: { id: true, username: true, email: true, role: true },
+      });
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        throw new ConflictException('Username or email is already taken');
+      }
+      throw error;
+    }
   }
 
   remove(id: number) {
