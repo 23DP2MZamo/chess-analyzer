@@ -1,10 +1,11 @@
+import { randomUUID } from 'node:crypto';
 import {
   BadRequestException,
   ConflictException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Platform } from '../../generated/prisma/client';
+import { Platform, Prisma } from '../../generated/prisma/client';
 import { ChessComClient, type ChessComArchiveResponse } from '../accounts/chesscom.client';
 import { LichessClient } from '../accounts/lichess.client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -246,13 +247,31 @@ export class GamesService {
         limit,
       );
       let imported = 0;
-      const selected = games.slice(0, limit);
-      for (let offset = 0; offset < selected.length; offset += INSERT_BATCH_SIZE) {
-        const data = selected
-          .slice(offset, offset + INSERT_BATCH_SIZE)
-          .map((game) => mapLichessGame(userId, game));
-        const result = await this.prismaService.game.createMany({ data, skipDuplicates: true });
-        imported += result.count;
+      for (const game of games.slice(0, limit)) {
+        const data = mapLichessGame(userId, game);
+        const id = randomUUID();
+        const where = {
+          userId_platform_externalId: { userId, platform: Platform.LICHESS, externalId: game.id },
+        };
+        try {
+          // An empty update preserves existing games and their analyses.
+          const saved = await this.prismaService.game.upsert({
+            where,
+            create: { ...data, id },
+            update: {},
+            select: { id: true },
+          });
+          if (saved.id === id) imported++;
+        } catch (error) {
+          // Prisma may emulate an empty-update upsert; concurrent insert races are duplicates too.
+          if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== 'P2002')
+            throw error;
+          const existing = await this.prismaService.game.findUnique({
+            where,
+            select: { id: true },
+          });
+          if (!existing) throw error;
+        }
       }
       return { imported, skipped: Math.min(games.length, limit) - imported };
     } finally {
