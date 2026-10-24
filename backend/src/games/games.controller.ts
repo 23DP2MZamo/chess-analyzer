@@ -1,6 +1,16 @@
-import { Controller, Get, Post, Request, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Post,
+  Request,
+  UseGuards,
+  UsePipes,
+  ValidationPipe,
+} from '@nestjs/common';
 import { SessionAuthGuard } from '../auth/auth.guard';
 import { GamesService } from './games.service';
+import { ImportLichessDto } from './import-lichess.dto';
 
 interface AuthenticatedRequest {
   user: { id: string };
@@ -30,7 +40,8 @@ export class GamesController {
 
   @Post('lichess/import')
   @UseGuards(SessionAuthGuard)
-  importLichessGames(@Request() request: AuthenticatedRequest) {
-    return this.gamesService.importLichessGames(request.user.id);
+  @UsePipes(new ValidationPipe({ transform: true, whitelist: true, forbidNonWhitelisted: true }))
+  importLichessGames(@Request() request: AuthenticatedRequest, @Body() body: ImportLichessDto) {
+    return this.gamesService.importLichessGames(request.user.id, body.limit);
   }
 }

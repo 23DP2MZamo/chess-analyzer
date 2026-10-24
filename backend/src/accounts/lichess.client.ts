@@ -1,4 +1,10 @@
-import { BadGatewayException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadGatewayException,
+  HttpException,
+  HttpStatus,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 
 export const LICHESS_GAMES_PAGE_SIZE = 300;
 
@@ -20,14 +26,29 @@ export class LichessClient {
       throw new NotFoundException(`Lichess account "${username}" was not found`);
     }
 
+    if (response.status === 429) {
+      const raw = Number(response.headers.get('Retry-After'));
+      const retryAfter = Number.isFinite(raw) && raw > 0 ? Math.min(Math.ceil(raw), 3600) : 60;
+      throw new HttpException(
+        { statusCode: 429, message: 'Lichess rate limit reached. Please retry later.', retryAfter },
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    }
     if (!response.ok) {
       throw new BadGatewayException('Lichess API returned an error');
     }
   }
 
-  async getUserGames(username: string, until?: number): Promise<LichessGame[]> {
+  async getUserGames(
+    username: string,
+    until?: number,
+    limit = LICHESS_GAMES_PAGE_SIZE,
+  ): Promise<LichessGame[]> {
     const query = new URLSearchParams({
-      max: String(LICHESS_GAMES_PAGE_SIZE),
+      max: String(limit),
+      sort: 'dateDesc',
+      ongoing: 'false',
+      finished: 'true',
       pgnInJson: 'true',
     });
     if (until !== undefined) {
@@ -50,6 +71,14 @@ export class LichessClient {
       throw new NotFoundException(`Lichess game history for "${username}" was not found`);
     }
 
+    if (response.status === 429) {
+      const raw = Number(response.headers.get('Retry-After'));
+      const retryAfter = Number.isFinite(raw) && raw > 0 ? Math.min(Math.ceil(raw), 3600) : 60;
+      throw new HttpException(
+        { statusCode: 429, message: 'Lichess rate limit reached. Please retry later.', retryAfter },
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    }
     if (!response.ok) {
       throw new BadGatewayException('Lichess API returned an error');
     }

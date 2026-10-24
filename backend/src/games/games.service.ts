@@ -1,7 +1,12 @@
-import { BadGatewayException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { Platform } from '../../generated/prisma/client';
 import { ChessComClient, type ChessComArchiveResponse } from '../accounts/chesscom.client';
-import { LICHESS_GAMES_PAGE_SIZE, LichessClient } from '../accounts/lichess.client';
+import { LichessClient } from '../accounts/lichess.client';
 import { PrismaService } from '../prisma/prisma.service';
 import { mapChessComGame } from './chesscom-game.mapper';
 import { parsePgn } from './pgn.parser';
@@ -218,46 +223,40 @@ export class GamesService {
     }
   }
 
-  async importLichessGames(userId: string): Promise<{ imported: number; skipped: number }> {
-    const linkedAccount = await this.prismaService.linkedAccount.findFirst({
-      where: { userId, platform: Platform.LICHESS },
-    });
+  private readonly activeImports = new Set<string>();
 
-    if (!linkedAccount) {
-      throw new NotFoundException('No Lichess account is linked');
+  async importLichessGames(
+    userId: string,
+    limit = 100,
+  ): Promise<{ imported: number; skipped: number }> {
+    if (!Number.isInteger(limit) || limit < 1 || limit > 300) {
+      throw new BadRequestException('limit must be an integer between 1 and 300');
     }
+    if (this.activeImports.has(userId)) throw new ConflictException('An import is already running');
+    this.activeImports.add(userId);
+    try {
+      const linkedAccount = await this.prismaService.linkedAccount.findFirst({
+        where: { userId, platform: Platform.LICHESS },
+      });
+      if (!linkedAccount) throw new NotFoundException('No Lichess account is linked');
 
-    let imported = 0;
-    let skipped = 0;
-    let until: number | undefined;
-
-    while (true) {
-      const games = await this.lichessClient.getUserGames(linkedAccount.platformUsername, until);
-      for (let offset = 0; offset < games.length; offset += INSERT_BATCH_SIZE) {
-        const data = games
+      const games = await this.lichessClient.getUserGames(
+        linkedAccount.platformUsername,
+        undefined,
+        limit,
+      );
+      let imported = 0;
+      const selected = games.slice(0, limit);
+      for (let offset = 0; offset < selected.length; offset += INSERT_BATCH_SIZE) {
+        const data = selected
           .slice(offset, offset + INSERT_BATCH_SIZE)
           .map((game) => mapLichessGame(userId, game));
         const result = await this.prismaService.game.createMany({ data, skipDuplicates: true });
         imported += result.count;
-        skipped += data.length - result.count;
       }
-
-      if (games.length < LICHESS_GAMES_PAGE_SIZE) {
-        break;
-      }
-
-      const oldestGameTime = Math.min(...games.map((game) => game.createdAt));
-      const nextUntil = oldestGameTime - 1;
-      if (
-        !Number.isFinite(oldestGameTime) ||
-        nextUntil < 0 ||
-        (until !== undefined && nextUntil >= until)
-      ) {
-        throw new BadGatewayException('Lichess game history pagination did not advance');
-      }
-      until = nextUntil;
+      return { imported, skipped: Math.min(games.length, limit) - imported };
+    } finally {
+      this.activeImports.delete(userId);
     }
-
-    return { imported, skipped };
   }
 }
