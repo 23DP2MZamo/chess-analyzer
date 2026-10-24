@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Link, NavLink } from 'react-router-dom';
+import { useCurrentUser } from '../../lib/use-current-user';
 
 const features = [
   {
@@ -50,6 +51,9 @@ const features = [
 export default function HomePage() {
   const [menuOpen, setMenuOpen] = useState(false);
   const closeMenu = () => setMenuOpen(false);
+  const { user } = useCurrentUser();
+  const accountPath = user ? '/profile' : '/login';
+  const accountLabel = user ? 'Profile' : 'Log in';
 
   return (
     <main className="min-h-screen overflow-hidden bg-[#1b1b1b] bg-[radial-gradient(circle_at_70%_20%,rgba(122,79,48,0.18),transparent_32%)] font-sans text-[#e8e5df]">
@@ -83,7 +87,23 @@ export default function HomePage() {
               {item}
             </NavLink>
           ))}
+          <Link
+            to={accountPath}
+            className="inline-flex min-h-9 items-center border border-[#c56531]/70 px-4 text-[11px] tracking-[.12em] text-[#e8e5df] transition-colors hover:bg-[#a94e22] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#d47440]"
+          >
+            {accountLabel}
+          </Link>
         </nav>
+
+        <div className="ml-auto mr-4 sm:hidden">
+          <Link
+            to={accountPath}
+            className="inline-flex min-h-9 items-center border border-[#c56531]/70 px-3 text-[10px] tracking-[.1em] text-[#e8e5df] hover:bg-[#a94e22]"
+            onClick={closeMenu}
+          >
+            {accountLabel}
+          </Link>
+        </div>
 
         <button
           className="flex size-[30px] cursor-pointer flex-col justify-center gap-[5px] border-0 bg-transparent sm:hidden"

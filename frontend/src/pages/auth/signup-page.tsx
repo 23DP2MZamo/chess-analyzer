@@ -1,10 +1,11 @@
 import { useState, type FormEvent } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { api, ApiError } from '../../lib/api';
 import AuthPage, { authInputClass, authLabelClass } from './auth-page';
 
 export default function SignupPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState('');
 
@@ -36,7 +37,7 @@ export default function SignupPage() {
     setError('');
     try {
       await api('/user', { method: 'POST', body: JSON.stringify({ username, email, password }) });
-      navigate('/login');
+      navigate('/login' + location.search);
     } catch (caughtError) {
       setError(
         caughtError instanceof ApiError
@@ -58,7 +59,7 @@ export default function SignupPage() {
       pending={pending}
       error={error}
       footerText="Jau ir konts?"
-      footerLink="/login"
+      footerLink={'/login' + location.search}
       footerLabel="Pieslēgties"
     >
       <label className={authLabelClass}>

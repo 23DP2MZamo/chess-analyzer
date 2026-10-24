@@ -1,5 +1,6 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import MainLayout from './layouts/base-layout1';
+import RequireAuth from './layouts/require-auth';
 import User from './pages/home/home-page';
 import LoginPage from './pages/auth/login-page';
 import SignupPage from './pages/auth/signup-page';
@@ -12,15 +13,17 @@ function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={<Navigate to="/login" replace />} />
+        <Route path="/" element={<Navigate to="/home" replace />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/signup" element={<SignupPage />} />
         <Route element={<MainLayout />}>
           <Route path="/home" element={<User />} />
-          <Route path="/profile" element={<ProfilePage />} />
-          <Route path="/analyze" element={<ToolPage />} />
-          <Route path="/games" element={<GamesPage />} />
-          <Route path="/stats" element={<StatsPage />} />
+          <Route element={<RequireAuth />}>
+            <Route path="/profile" element={<ProfilePage />} />
+            <Route path="/analyze" element={<ToolPage />} />
+            <Route path="/games" element={<GamesPage />} />
+            <Route path="/stats" element={<StatsPage />} />
+          </Route>
         </Route>
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
