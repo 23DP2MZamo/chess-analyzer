@@ -1,6 +1,6 @@
 {
   "rootDir": "..",
-  "testMatch": ["<rootDir>/test/features.integration.spec.ts"],
+  "testMatch": ["<rootDir>/test/*.integration.spec.ts"],
   "transform": { "^.+\\.(t|j)s$": "ts-jest" },
   "moduleNameMapper": { "^(\\.{1,2}/.*)\\.js$": "$1" },
   "testEnvironment": "node"

@@ -73,7 +73,7 @@ describe('LichessClient', () => {
 
     const [url, options] = fetchMock.mock.calls[0];
     expect(url).toBe(
-      'https://lichess.org/api/games/user/some%20user?max=300&sort=dateDesc&ongoing=false&finished=true&pgnInJson=true&until=1700000000000',
+      'https://lichess.org/api/games/user/some%20user?max=300&sort=dateDesc&ongoing=false&finished=true&pgnInJson=true&opening=true&until=1700000000000',
     );
     expect(options?.headers).toEqual({ Accept: 'application/x-ndjson' });
     expect(options?.signal).toBeInstanceOf(AbortSignal);

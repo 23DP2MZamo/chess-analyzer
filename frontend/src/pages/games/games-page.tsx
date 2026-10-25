@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Fragment, useEffect, useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import { api, ApiError } from '../../lib/api';
 
 type Game = {
@@ -14,65 +14,89 @@ type Game = {
   mode: string;
   timeControl: string | null;
   playedAt: string;
-  opening: { eco: string; name: string } | null;
-  analysis: { accuracyWhite: number | null; accuracyBlack: number | null } | null;
+  opening: { eco: string | null; name: string | null } | null;
+  groupKey: string;
+  playerResult: 'WIN' | 'LOSS' | 'DRAW' | 'UNKNOWN';
+  playerElo: number | null;
+  playerAccuracy: number | null;
 };
-
-function resultLabel(result: string) {
-  if (result === 'WHITE_WIN') return 'White won';
-  if (result === 'BLACK_WIN') return 'Black won';
-  return 'Draw';
-}
+type SearchResult = {
+  items: Game[];
+  total: number;
+  page: number;
+  pageSize: number;
+  groups: { key: string; eco: string | null; name: string | null; count: number }[];
+};
+const empty: SearchResult = { items: [], total: 0, page: 1, pageSize: 25, groups: [] };
+const results = { WIN: 'Win', LOSS: 'Loss', DRAW: 'Draw', UNKNOWN: 'Unknown player' };
+const selectClass =
+  'h-11 w-full border border-white/20 bg-[#202020] px-3 text-sm text-[#eee] focus:outline-2 focus:outline-[#d47440]';
 
 export default function GamesPage() {
-  const [games, setGames] = useState<Game[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [params, setParams] = useSearchParams();
+  const query = params.toString();
+  const [data, setData] = useState<SearchResult>(empty);
+  const [loadedQuery, setLoadedQuery] = useState<string | null>(null);
+  const [refresh, setRefresh] = useState(0);
   const [importing, setImporting] = useState<'CHESSCOM' | 'LICHESS' | null>(null);
   const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
   const [lichessLimit, setLichessLimit] = useState('100');
   const validLimit =
     Number.isInteger(Number(lichessLimit)) &&
     Number(lichessLimit) >= 1 &&
     Number(lichessLimit) <= 300;
-  const [error, setError] = useState('');
-
-  async function loadGames(showLoading = false) {
-    if (showLoading) setLoading(true);
-    try {
-      setGames(await api<Game[]>('/games'));
-    } catch (caughtError) {
-      setError(caughtError instanceof ApiError ? caughtError.message : 'Could not load games.');
-    } finally {
-      setLoading(false);
-    }
-  }
-
+  const dateError =
+    params.get('dateFrom') &&
+    params.get('dateTo') &&
+    params.get('dateFrom')! > params.get('dateTo')!
+      ? 'Start date must be on or before end date.'
+      : '';
+  const requestKey = query + ':' + refresh;
+  const loading = loadedQuery !== requestKey && !dateError;
+  const visibleError = dateError || (!loading ? error : '');
   useEffect(() => {
+    if (dateError) return;
     let active = true;
-    api<Game[]>('/games')
-      .then((loadedGames) => {
-        if (active) setGames(loadedGames);
-      })
-      .catch((caughtError) => {
-        if (active) {
-          setError(caughtError instanceof ApiError ? caughtError.message : 'Could not load games.');
-        }
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
+    const timer = window.setTimeout(() => {
+      api<SearchResult>('/games/search' + (query ? '?' + query : ''))
+        .then((value) => {
+          if (active) {
+            setData(value);
+            setError('');
+          }
+        })
+        .catch((caught) => {
+          if (active) {
+            setData(empty);
+            setError(caught instanceof ApiError ? caught.message : 'Could not load games.');
+          }
+        })
+        .finally(() => {
+          if (active) setLoadedQuery(requestKey);
+        });
+    }, 200);
     return () => {
       active = false;
+      window.clearTimeout(timer);
     };
-  }, []);
-
+  }, [query, requestKey, dateError]);
+  function change(name: string, value: string) {
+    setParams((current) => {
+      const next = new URLSearchParams(current);
+      if (value) next.set(name, value);
+      else next.delete(name);
+      if (name !== 'page') next.delete('page');
+      return next;
+    });
+  }
   async function importGames(platform: 'CHESSCOM' | 'LICHESS') {
     if (importing || (platform === 'LICHESS' && !validLimit)) return;
     setImporting(platform);
-    setError('');
     setMessage('');
+    setError('');
     try {
-      const result = await api<{ imported: number; skipped: number }>(
+      const value = await api<{ imported: number; skipped: number }>(
         `/games/${platform === 'CHESSCOM' ? 'chesscom' : 'lichess'}/import`,
         {
           method: 'POST',
@@ -81,30 +105,49 @@ export default function GamesPage() {
             : {}),
         },
       );
-      setMessage(`${result.imported} games imported, ${result.skipped} already existed.`);
-      await loadGames(true);
-    } catch (caughtError) {
-      setError(caughtError instanceof ApiError ? caughtError.message : 'Could not import games.');
+      setMessage(`${value.imported} games imported, ${value.skipped} already existed.`);
+      setRefresh((value) => value + 1);
+    } catch (caught) {
+      setError(caught instanceof ApiError ? caught.message : 'Could not import games.');
     } finally {
       setImporting(null);
     }
   }
-
+  const pages = Math.max(1, Math.ceil(data.total / data.pageSize));
+  const groupLabel = (game: Game) => {
+    const group = data.groups.find((value) => value.key === game.groupKey);
+    return `${[game.opening?.eco, game.opening?.name].filter(Boolean).join(' · ') || 'Unknown opening'} — ${group?.count ?? 0} games`;
+  };
+  function select(label: string, name: string, options: [string, string][], fallback = '') {
+    return (
+      <label className="grid gap-2 text-xs text-[#aaa]">
+        {label}
+        <select
+          className={selectClass}
+          value={params.get(name) ?? fallback}
+          onChange={(event) => change(name, event.target.value)}
+        >
+          {options.map(([value, text]) => (
+            <option value={value} key={value}>
+              {text}
+            </option>
+          ))}
+        </select>
+      </label>
+    );
+  }
   return (
     <main className="min-h-screen bg-[#1b1b1b] px-5 py-12 font-sans text-[#e8e5df] sm:px-[7vw] sm:py-16">
-      <div className="mb-10 flex flex-col justify-between gap-5 border-b border-white/10 pb-7 sm:flex-row sm:items-end">
+      <Link to="/home" className="text-xs text-[#aaa] hover:text-white">
+        ← Home
+      </Link>
+      <header className="mt-8 flex flex-col justify-between gap-6 border-b border-white/10 pb-8 xl:flex-row xl:items-end">
         <div>
-          <Link
-            className="text-xs tracking-[.14em] text-[#777] no-underline hover:text-white"
-            to="/home"
-          >
-            ← Home
-          </Link>
-          <p className="mt-8 text-[10px] tracking-[.2em] text-[#d47440]">GAME HISTORY</p>
-          <h1 className="mt-3 text-5xl font-light tracking-[-.04em] sm:text-7xl">Your games</h1>
+          <p className="text-[10px] tracking-[.2em] text-[#d47440]">GAME HISTORY</p>
+          <h1 className="mt-3 text-5xl font-light sm:text-7xl">Your games</h1>
         </div>
         <div className="flex flex-wrap items-end gap-3">
-          <label className="grid gap-1 text-xs text-[#aaa]">
+          <label className="grid gap-2 text-xs text-[#aaa]">
             Latest Lichess games (1–300)
             <input
               aria-label="Lichess game limit"
@@ -114,100 +157,241 @@ export default function GamesPage() {
               step={1}
               value={lichessLimit}
               onChange={(event) => setLichessLimit(event.target.value)}
-              disabled={importing !== null}
-              className="h-11 w-32 border border-white/20 bg-[#202020] px-3 text-white"
+              disabled={!!importing}
+              className={selectClass + ' max-w-32'}
             />
           </label>
-          {(['CHESSCOM', 'LICHESS'] as const).map((platform) => {
-            const name = platform === 'CHESSCOM' ? 'Chess.com' : 'Lichess';
-            return (
-              <button
-                className="h-11 border border-[#c56531] bg-[#a94e22] px-5 text-xs tracking-[.08em] text-white transition hover:bg-[#c25d2a] disabled:cursor-wait disabled:opacity-50"
-                type="button"
-                key={platform}
-                onClick={() => importGames(platform)}
-                disabled={importing !== null || (platform === 'LICHESS' && !validLimit)}
-              >
-                {importing === platform ? 'Importing...' : `Import ${name} games`}
-              </button>
-            );
-          })}
+          {(['CHESSCOM', 'LICHESS'] as const).map((platform) => (
+            <button
+              type="button"
+              key={platform}
+              onClick={() => importGames(platform)}
+              disabled={!!importing || (platform === 'LICHESS' && !validLimit)}
+              className="h-11 bg-[#a94e22] px-5 text-xs hover:bg-[#c25d2a] disabled:opacity-50"
+            >
+              {importing === platform
+                ? 'Importing…'
+                : `Import ${platform === 'LICHESS' ? 'Lichess' : 'Chess.com'} games`}
+            </button>
+          ))}
         </div>
-      </div>
-      {error && (
-        <p
-          className="mb-6 border border-red-400/30 bg-red-950/30 px-4 py-3 text-sm text-red-200"
-          role="alert"
-        >
-          {error}
+      </header>
+      <section
+        aria-label="Game filters"
+        className="my-6 grid gap-4 border border-white/10 bg-white/[.02] p-5 sm:grid-cols-2 lg:grid-cols-4"
+      >
+        {select('Format', 'format', [
+          ['', 'All formats'],
+          ...['BULLET', 'BLITZ', 'RAPID', 'CLASSICAL', 'CORRESPONDENCE'].map(
+            (value): [string, string] => [value, value[0] + value.slice(1).toLowerCase()],
+          ),
+        ])}
+        {select('Mode', 'mode', [
+          ['', 'All modes'],
+          ['RATED', 'Rated'],
+          ['CASUAL', 'Casual'],
+        ])}
+        {select('Result', 'result', [
+          ['', 'All results'],
+          ['WIN', 'Win'],
+          ['LOSS', 'Loss'],
+          ['DRAW', 'Draw'],
+        ])}
+        {select(
+          'Group by',
+          'groupBy',
+          [
+            ['none', 'No grouping'],
+            ['opening', 'Opening (ECO / name)'],
+          ],
+          'none',
+        )}
+        <label className="grid gap-2 text-xs text-[#aaa]">
+          From date (UTC)
+          <input
+            type="date"
+            className={selectClass}
+            value={params.get('dateFrom') ?? ''}
+            onChange={(event) => change('dateFrom', event.target.value)}
+          />
+        </label>
+        <label className="grid gap-2 text-xs text-[#aaa]">
+          Through date (UTC)
+          <input
+            type="date"
+            className={selectClass}
+            value={params.get('dateTo') ?? ''}
+            onChange={(event) => change('dateTo', event.target.value)}
+          />
+        </label>
+        {select(
+          'Sort by',
+          'sortBy',
+          [
+            ['date', 'Date'],
+            ['elo', 'Your Elo'],
+            ['accuracy', 'Your accuracy'],
+          ],
+          'date',
+        )}
+        {select(
+          'Order',
+          'order',
+          [
+            ['desc', 'Descending'],
+            ['asc', 'Ascending'],
+          ],
+          'desc',
+        )}
+        <label className="grid gap-2 text-xs text-[#aaa] sm:col-span-2">
+          Opening ECO / name
+          <input
+            className={selectClass}
+            maxLength={100}
+            placeholder="e.g. B20 or Sicilian"
+            value={params.get('opening') ?? ''}
+            onChange={(event) => change('opening', event.target.value)}
+          />
+        </label>
+        <div className="flex items-end">
+          <button
+            type="button"
+            onClick={() => setParams({})}
+            className="h-11 border border-white/20 px-5 text-xs hover:border-white/50"
+          >
+            Reset filters
+          </button>
+        </div>
+        <p className="self-end text-xs leading-5 text-[#999]">
+          Results, Elo, and accuracy use your linked account. Missing values appear last. Opening
+          counts include all matching games.
+        </p>
+      </section>
+      {visibleError && (
+        <p role="alert" className="mb-6 border border-red-400/30 p-4 text-sm text-red-200">
+          {visibleError}{' '}
+          <button
+            type="button"
+            onClick={() => setRefresh((value) => value + 1)}
+            className="ml-3 underline"
+          >
+            Retry
+          </button>
         </p>
       )}
       {message && (
-        <p
-          className="mb-6 border border-emerald-400/30 bg-emerald-950/30 px-4 py-3 text-sm text-emerald-200"
-          role="status"
-        >
+        <p role="status" className="mb-6 border border-emerald-400/30 p-4 text-sm text-emerald-200">
           {message}
         </p>
       )}
       {loading ? (
-        <p className="py-16 text-center text-sm text-[#777]" role="status">
-          Loading games...
+        <p role="status" className="py-16 text-center text-[#aaa]">
+          Loading games…
         </p>
-      ) : games.length === 0 ? (
-        <div className="border border-white/10 bg-white/[.025] px-6 py-16 text-center">
-          <p className="text-lg text-[#ddd]">No games yet</p>
-          <p className="mt-3 text-sm text-[#777]">
-            Link a Chess.com or Lichess account and import your game history.
-          </p>
-          <Link
-            className="mt-6 inline-block text-xs tracking-[.1em] text-[#d47440] no-underline hover:text-white"
-            to="/profile"
-          >
-            Manage linked accounts →
-          </Link>
-        </div>
       ) : (
-        <div className="overflow-x-auto border border-white/10">
-          <table className="w-full min-w-[760px] border-collapse text-left text-sm">
-            <thead className="border-b border-white/10 text-[10px] tracking-[.14em] text-[#777] uppercase">
-              <tr>
-                <th className="px-5 py-4 font-normal">Game</th>
-                <th className="px-5 py-4 font-normal">Result</th>
-                <th className="px-5 py-4 font-normal">Format</th>
-                <th className="px-5 py-4 font-normal">Opening</th>
-                <th className="px-5 py-4 font-normal">Accuracy</th>
-                <th className="px-5 py-4 font-normal">Date</th>
-              </tr>
-            </thead>
-            <tbody>
-              {games.map((game) => (
-                <tr className="border-b border-white/6 text-[#bbb] last:border-b-0" key={game.id}>
-                  <td className="px-5 py-4 text-[#e8e5df]">
-                    {game.whiteUsername} <span className="text-[#666]">vs</span>{' '}
-                    {game.blackUsername}
-                  </td>
-                  <td className="px-5 py-4">{resultLabel(game.result)}</td>
-                  <td className="px-5 py-4">
-                    {game.format}{' '}
-                    <span className="text-[#666]">{game.timeControl ?? game.mode}</span>
-                  </td>
-                  <td className="px-5 py-4">
-                    {game.opening ? `${game.opening.eco} ${game.opening.name}` : '—'}
-                  </td>
-                  <td className="px-5 py-4">
-                    {game.analysis?.accuracyWhite != null
-                      ? `${game.analysis.accuracyWhite.toFixed(1)}% / ${game.analysis.accuracyBlack?.toFixed(1) ?? '—'}%`
-                      : 'Not analyzed'}
-                  </td>
-                  <td className="px-5 py-4 text-[#777]">
-                    {new Date(game.playedAt).toLocaleDateString()}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        !visibleError && (
+          <>
+            <p className="mb-4 text-xs text-[#aaa]" role="status">
+              {data.total} matching games
+            </p>
+            {data.items.length === 0 ? (
+              <div className="border border-white/10 p-10 text-center">
+                <p>No matching games</p>
+                <p className="mt-3 text-sm text-[#aaa]">
+                  Adjust the filters or import games from a linked account.
+                </p>
+                <Link className="mt-5 inline-block text-sm text-[#d47440]" to="/profile">
+                  Manage linked accounts →
+                </Link>
+              </div>
+            ) : (
+              <div className="overflow-x-auto border border-white/10">
+                <table className="w-full min-w-[950px] text-left text-sm">
+                  <thead className="text-xs text-[#aaa]">
+                    <tr>
+                      {[
+                        'Game',
+                        'Your result',
+                        'Format / mode',
+                        'Opening',
+                        'Your Elo',
+                        'Your accuracy',
+                        'Date',
+                      ].map((label) => (
+                        <th key={label} className="p-4 font-normal">
+                          {label}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.items.map((game, index) => (
+                      <Fragment key={game.id}>
+                        {params.get('groupBy') === 'opening' &&
+                          (index === 0 || data.items[index - 1].groupKey !== game.groupKey) && (
+                            <tr className="border-y border-white/10 bg-[#2b231e]">
+                              <th colSpan={7} className="p-4 text-xs font-normal text-[#e89b70]">
+                                {groupLabel(game)}
+                              </th>
+                            </tr>
+                          )}
+                        <tr className="border-t border-white/10 text-[#bbb]">
+                          <td className="p-4 text-[#eee]">
+                            {game.whiteUsername} <span className="text-[#777]">vs</span>{' '}
+                            {game.blackUsername}
+                            <p className="mt-1 text-[10px] text-[#888]">{game.platform}</p>
+                          </td>
+                          <td className="p-4">{results[game.playerResult]}</td>
+                          <td className="p-4">
+                            {game.format}
+                            <p className="mt-1 text-xs text-[#888]">
+                              {game.mode} · {game.timeControl ?? '—'}
+                            </p>
+                          </td>
+                          <td className="p-4">
+                            {[game.opening?.eco, game.opening?.name].filter(Boolean).join(' · ') ||
+                              'Unknown opening'}
+                          </td>
+                          <td className="p-4">{game.playerElo ?? '—'}</td>
+                          <td className="p-4">
+                            {game.playerAccuracy != null
+                              ? `${game.playerAccuracy.toFixed(1)}%`
+                              : 'Not analyzed'}
+                          </td>
+                          <td className="p-4 whitespace-nowrap">
+                            {new Date(game.playedAt).toLocaleDateString()}
+                          </td>
+                        </tr>
+                      </Fragment>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            <nav
+              aria-label="Game pages"
+              className="mt-6 flex flex-wrap items-center justify-between gap-4 text-sm"
+            >
+              <button
+                className="border border-white/20 px-4 py-2 disabled:opacity-40"
+                disabled={data.page <= 1}
+                onClick={() => change('page', String(data.page - 1))}
+              >
+                Previous
+              </button>
+              <span>
+                Page {data.page} of {pages}
+              </span>
+              <button
+                className="border border-white/20 px-4 py-2 disabled:opacity-40"
+                disabled={data.page >= pages}
+                onClick={() => change('page', String(data.page + 1))}
+              >
+                Next
+              </button>
+            </nav>
+          </>
+        )
       )}
     </main>
   );
