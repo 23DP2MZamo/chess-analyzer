@@ -254,16 +254,16 @@ export class GamesService {
           userId_platform_externalId: { userId, platform: Platform.LICHESS, externalId: game.id },
         };
         try {
-          // An empty update preserves existing games and their analyses.
+          // Refresh PGN opening tags on reimport without replacing the game or its analysis.
           const saved = await this.prismaService.game.upsert({
             where,
             create: { ...data, id },
-            update: {},
+            update: { pgn: data.pgn },
             select: { id: true },
           });
           if (saved.id === id) imported++;
         } catch (error) {
-          // Prisma may emulate an empty-update upsert; concurrent insert races are duplicates too.
+          // Concurrent insert races are duplicates too.
           if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== 'P2002')
             throw error;
           const existing = await this.prismaService.game.findUnique({

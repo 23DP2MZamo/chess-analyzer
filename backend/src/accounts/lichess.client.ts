@@ -50,6 +50,7 @@ export class LichessClient {
       ongoing: 'false',
       finished: 'true',
       pgnInJson: 'true',
+      opening: 'true',
     });
     if (until !== undefined) {
       query.set('until', String(until));
