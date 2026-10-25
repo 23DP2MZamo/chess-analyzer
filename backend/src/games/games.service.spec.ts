@@ -174,7 +174,7 @@ describe('GamesService', () => {
         platform: Platform.LICHESS,
         externalId: lichessGame.id,
       }) as unknown,
-      update: {},
+      update: { pgn: lichessGame.pgn },
       select: { id: true },
     });
   });
