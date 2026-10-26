@@ -12,7 +12,13 @@ describe('Profile and JWT role authorization', () => {
   let app: INestApplication<App>;
   const tokens = new JwtTokens();
   const user = { id: 'user-id', username: 'Player', email: 'player@example.com', role: 'USER' };
-  const users = { findById: jest.fn(), update: jest.fn(), findAll: jest.fn() };
+  const users = {
+    findById: jest.fn(),
+    update: jest.fn(),
+    findAll: jest.fn(),
+    getAdminStats: jest.fn(),
+    setBlocked: jest.fn(),
+  };
   const prisma = { user: { findUnique: jest.fn() } };
 
   beforeEach(async () => {
@@ -21,6 +27,8 @@ describe('Profile and JWT role authorization', () => {
     users.findById.mockResolvedValue(user);
     users.update.mockImplementation((_id: string, data: object) => ({ ...user, ...data }));
     users.findAll.mockResolvedValue([user]);
+    users.getAdminStats.mockResolvedValue({ users: 1, games: 2, analyses: 1 });
+    users.setBlocked.mockResolvedValue({ ...user, isBlocked: true });
     const module = await Test.createTestingModule({
       controllers: [UserController],
       providers: [
@@ -87,11 +95,38 @@ describe('Profile and JWT role authorization', () => {
       .auth(tokens.issue('user-id'), { type: 'bearer' })
       .expect(401);
   });
+  it('denies blocked accounts access to authenticated routes', async () => {
+    prisma.user.findUnique.mockResolvedValue({ ...user, isBlocked: true });
+    await request(app.getHttpServer())
+      .get('/user/me')
+      .auth(tokens.issue('user-id'), { type: 'bearer' })
+      .expect(401);
+  });
   it('returns 403 for USER on the admin list, but allows ADMIN using its current database role', async () => {
     const token = tokens.issue('user-id');
     await request(app.getHttpServer()).get('/user').auth(token, { type: 'bearer' }).expect(403);
+    await request(app.getHttpServer())
+      .get('/user/admin/stats')
+      .auth(token, { type: 'bearer' })
+      .expect(403);
+    await request(app.getHttpServer())
+      .patch('/user/other-id/block')
+      .auth(token, { type: 'bearer' })
+      .send({ blocked: true })
+      .expect(403);
     prisma.user.findUnique.mockResolvedValue({ ...user, role: 'ADMIN' });
     await request(app.getHttpServer()).get('/user').auth(token, { type: 'bearer' }).expect(200);
+    await request(app.getHttpServer())
+      .get('/user/admin/stats')
+      .auth(token, { type: 'bearer' })
+      .expect(200)
+      .expect({ users: 1, games: 2, analyses: 1 });
+    await request(app.getHttpServer())
+      .patch('/user/other-id/block')
+      .auth(token, { type: 'bearer' })
+      .send({ blocked: true })
+      .expect(200);
+    expect(users.setBlocked).toHaveBeenCalledWith('other-id', true);
   });
   it('cannot update another user through an unprotected legacy route', async () => {
     await request(app.getHttpServer())

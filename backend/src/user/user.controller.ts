@@ -14,6 +14,7 @@ import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { SessionAuthGuard } from '../auth/auth.guard';
 import { requireRole } from '../auth/require-role';
+import { SetUserBlockedDto } from './dto/set-user-blocked.dto';
 
 @Controller('user')
 export class UserController {
@@ -46,9 +47,21 @@ export class UserController {
   }
 
   @requireRole('ADMIN')
+  @Get('admin/stats')
+  getAdminStats() {
+    return this.userService.getAdminStats();
+  }
+
+  @requireRole('ADMIN')
+  @Patch(':id/block')
+  setBlocked(@Param('id') id: string, @Body() body: SetUserBlockedDto) {
+    return this.userService.setBlocked(id, body.blocked);
+  }
+
+  @requireRole('ADMIN')
   @Get(':id')
   findOne(@Param('id') id: string) {
-    return this.userService.findOne(+id);
+    return this.userService.findOne(id);
   }
 
   @requireRole('ADMIN')
@@ -60,6 +73,6 @@ export class UserController {
   @requireRole('ADMIN')
   @Delete(':id')
   remove(@Param('id') id: string) {
-    return this.userService.remove(+id);
+    return this.userService.remove(id);
   }
 }

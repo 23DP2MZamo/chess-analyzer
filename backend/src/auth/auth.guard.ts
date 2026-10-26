@@ -30,9 +30,9 @@ export class SessionAuthGuard implements CanActivate {
     const id = this.tokens.verify(token);
     const user = await this.prisma.user.findUnique({
       where: { id },
-      select: { id: true, username: true, email: true, role: true },
+      select: { id: true, username: true, email: true, role: true, isBlocked: true },
     });
-    if (!user) throw new UnauthorizedException('Account no longer exists');
+    if (!user || user.isBlocked) throw new UnauthorizedException('Account is unavailable');
     request.user = user;
     return true;
   }

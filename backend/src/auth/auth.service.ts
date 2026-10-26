@@ -8,6 +8,7 @@ export class AuthService {
   async validateUser(identifier: string, password: string) {
     const user = await this.userSevice.findByUsernameOrEmail(identifier);
     if (!user) throw new UnauthorizedException('User not found!');
+    if (user.isBlocked) throw new UnauthorizedException('Account is unavailable');
     const isPasswordMatch = await compare(password, user.passwordHash);
     if (!isPasswordMatch) throw new UnauthorizedException('Invalid credentials');
 

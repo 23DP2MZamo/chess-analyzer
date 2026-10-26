@@ -68,12 +68,50 @@ export class UserService {
   }
   findAll() {
     return this.prismaService.user.findMany({
-      select: { id: true, username: true, email: true, role: true },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        username: true,
+        email: true,
+        role: true,
+        isBlocked: true,
+        createdAt: true,
+      },
     });
   }
 
-  findOne(id: number) {
-    return `This action returns a #${id} user`;
+  async getAdminStats() {
+    const [users, games, analyses] = await Promise.all([
+      this.prismaService.user.count(),
+      this.prismaService.game.count(),
+      this.prismaService.analysis.count(),
+    ]);
+    return { users, games, analyses };
+  }
+
+  async findOne(id: string) {
+    const user = await this.prismaService.user.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        username: true,
+        email: true,
+        role: true,
+        isBlocked: true,
+        createdAt: true,
+      },
+    });
+    if (!user) throw new NotFoundException('User not found');
+    return user;
+  }
+
+  async setBlocked(id: string, blocked: boolean) {
+    const user = await this.prismaService.user.updateMany({
+      where: { id },
+      data: { isBlocked: blocked },
+    });
+    if (!user.count) throw new NotFoundException('User not found');
+    return this.findOne(id);
   }
 
   async update(id: string, updateUserDto: UpdateUserDto) {
@@ -120,7 +158,17 @@ export class UserService {
     }
   }
 
-  remove(id: number) {
-    return `This action removes a #${id} user`;
+  async remove(id: string) {
+    try {
+      return await this.prismaService.user.delete({
+        where: { id },
+        select: { id: true, username: true, email: true },
+      });
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
+        throw new NotFoundException('User not found');
+      }
+      throw error;
+    }
   }
 }

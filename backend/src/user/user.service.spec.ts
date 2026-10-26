@@ -10,10 +10,15 @@ describe('Profile persistence', () => {
     username: 'Player',
     email: 'player@example.com',
     role: 'USER',
+    isBlocked: false,
     passwordHash: 'old',
   };
   let stored: typeof initial;
-  let prisma: { user: { findUnique: jest.Mock; findFirst: jest.Mock; update: jest.Mock } };
+  let prisma: {
+    user: Record<string, jest.Mock>;
+    game: { count: jest.Mock };
+    analysis: { count: jest.Mock };
+  };
   let service: UserService;
   beforeEach(() => {
     stored = { ...initial };
@@ -21,6 +26,10 @@ describe('Profile persistence', () => {
       user: {
         findUnique: jest.fn().mockImplementation(() => stored),
         findFirst: jest.fn().mockResolvedValue(null),
+        findMany: jest.fn(),
+        count: jest.fn(),
+        updateMany: jest.fn(),
+        delete: jest.fn(),
         update: jest.fn().mockImplementation(({ data }: { data: Partial<typeof initial> }) => {
           stored = {
             ...stored,
@@ -34,6 +43,8 @@ describe('Profile persistence', () => {
           };
         }),
       },
+      game: { count: jest.fn() },
+      analysis: { count: jest.fn() },
     };
     service = new UserService(prisma as unknown as PrismaService);
   });
@@ -74,5 +85,33 @@ describe('Profile persistence', () => {
   it('returns 404 for missing profiles', async () => {
     prisma.user.findUnique.mockResolvedValue(null);
     await expect(service.findById('missing')).rejects.toBeInstanceOf(NotFoundException);
+  });
+  it('returns aggregate user, game, and analysis counts', async () => {
+    prisma.user.count.mockResolvedValue(4);
+    prisma.game.count.mockResolvedValue(20);
+    prisma.analysis.count.mockResolvedValue(12);
+    await expect(service.getAdminStats()).resolves.toEqual({ users: 4, games: 20, analyses: 12 });
+  });
+  it('blocks and unblocks accounts by string ID and reports missing users', async () => {
+    prisma.user.updateMany.mockResolvedValue({ count: 1 });
+    await service.setBlocked('user-id', true);
+    expect(prisma.user.updateMany).toHaveBeenCalledWith({
+      where: { id: 'user-id' },
+      data: { isBlocked: true },
+    });
+    prisma.user.updateMany.mockResolvedValue({ count: 0 });
+    await expect(service.setBlocked('missing', true)).rejects.toBeInstanceOf(NotFoundException);
+  });
+  it('deletes by string ID without returning password data', async () => {
+    prisma.user.delete.mockResolvedValue({
+      id: 'user-id',
+      username: 'Player',
+      email: 'player@example.com',
+    });
+    await service.remove('user-id');
+    expect(prisma.user.delete).toHaveBeenCalledWith({
+      where: { id: 'user-id' },
+      select: { id: true, username: true, email: true },
+    });
   });
 });
