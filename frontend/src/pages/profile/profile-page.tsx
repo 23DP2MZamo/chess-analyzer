@@ -185,9 +185,7 @@ export default function ProfilePage() {
           <Link className="text-sm text-stone-400 no-underline hover:text-white" to="/home">
             ← Home
           </Link>
-          <p className="mb-5 mt-10 text-[10px] tracking-[.2em] text-[#d47440] uppercase">
-            Jūsu konts
-          </p>
+          <p className="mb-5 mt-10 text-sm tracking-[.2em] text-[#d47440] uppercase">Jūsu konts</p>
           <h1 className="text-4xl leading-none font-extralight tracking-[-.04em] text-stone-100 sm:text-6xl">
             Profils
           </h1>
@@ -197,7 +195,7 @@ export default function ProfilePage() {
         </div>
         <div className="border border-white/10 bg-[#1c1c1c] p-5 shadow-2xl shadow-black/20 sm:p-8">
           <div className="mb-7 flex items-center justify-between border-b border-white/10 pb-4">
-            <span className="text-xs tracking-[.16em] text-stone-400 uppercase">
+            <span className="text-sm tracking-[.16em] text-stone-400 uppercase">
               Konta informācija
             </span>
             <span className="size-1.5 rounded-full bg-[#dc6930] shadow-[0_0_10px_#dc6930]" />
@@ -228,7 +226,7 @@ export default function ProfilePage() {
             </div>
           ) : (
             <form className="grid gap-5" onSubmit={handleSubmit} noValidate aria-busy={pending}>
-              <p className="text-xs text-stone-400">Loma: {profile.role}</p>
+              <p className="text-sm text-stone-400">Loma: {profile.role}</p>
               <fieldset disabled={pending} className="grid min-w-0 gap-5">
                 <label className="grid gap-2 text-sm text-stone-300">
                   Lietotājvārds
@@ -252,7 +250,7 @@ export default function ProfilePage() {
                 </label>
                 <label className="grid gap-2 text-sm text-stone-300">
                   Jauna parole{' '}
-                  <span className="text-xs text-stone-500">Atstājiet tukšu, lai nemainītu</span>
+                  <span className="text-sm text-stone-500">Atstājiet tukšu, lai nemainītu</span>
                   <input
                     className="min-h-12 rounded-md border border-white/10 bg-black/15 px-4 text-stone-100 outline-none focus:border-[#bd5d2a]"
                     type="password"
@@ -299,10 +297,10 @@ export default function ProfilePage() {
         </div>
         <div className="border border-white/10 bg-[#1c1c1c] p-5 shadow-2xl shadow-black/20 sm:p-8 lg:col-span-2">
           <div className="mb-7 flex items-center justify-between border-b border-white/10 pb-4">
-            <span className="text-xs tracking-[.16em] text-stone-400 uppercase">
+            <span className="text-sm tracking-[.16em] text-stone-400 uppercase">
               Piesaistītie konti
             </span>
-            <span className="text-xs text-stone-600">Chess.com / Lichess</span>
+            <span className="text-sm text-stone-600">Chess.com / Lichess</span>
           </div>
           <div className="grid gap-8 lg:grid-cols-[1fr_1.2fr]">
             <div className="grid gap-3">
@@ -322,9 +320,9 @@ export default function ProfilePage() {
                       <p className="text-sm text-stone-200">
                         {account.platform === 'CHESSCOM' ? 'Chess.com' : 'Lichess'}
                       </p>
-                      <p className="text-xs text-stone-500">{account.platformUsername}</p>
+                      <p className="text-sm text-stone-500">{account.platformUsername}</p>
                     </div>
-                    <span className="text-xs text-emerald-400">Connected</span>
+                    <span className="text-sm text-emerald-400">Connected</span>
                   </div>
                 ))
               )}
@@ -333,7 +331,7 @@ export default function ProfilePage() {
               <div className="flex gap-2">
                 {(['CHESSCOM', 'LICHESS'] as const).map((platform) => (
                   <button
-                    className={`flex-1 border px-3 py-3 text-xs ${accountPlatform === platform ? 'border-[#bd5d2a] text-white' : 'border-white/10 text-stone-500'}`}
+                    className={`flex-1 border px-3 py-3 text-sm ${accountPlatform === platform ? 'border-[#bd5d2a] text-white' : 'border-white/10 text-stone-500'}`}
                     key={platform}
                     type="button"
                     disabled={accountPending || !profile}

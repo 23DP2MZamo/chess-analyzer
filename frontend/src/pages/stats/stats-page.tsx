@@ -28,12 +28,12 @@ export default function StatsPage() {
   return (
     <main className="min-h-screen bg-[#1b1b1b] px-5 py-12 font-sans text-[#e8e5df] sm:px-[7vw] sm:py-16">
       <Link
-        className="text-xs tracking-[.14em] text-[#777] no-underline hover:text-white"
+        className="text-base tracking-[.14em] text-[#c8c2b9] no-underline hover:text-white"
         to="/home"
       >
         ← Home
       </Link>
-      <p className="mt-10 text-[10px] tracking-[.2em] text-[#d47440]">IMPROVEMENT</p>
+      <p className="mt-10 text-sm tracking-[.2em] text-[#d47440]">IMPROVEMENT</p>
       <h1 className="mt-3 text-5xl font-light tracking-[-.04em] sm:text-7xl">Your progress</h1>
       {error && (
         <p
@@ -44,7 +44,7 @@ export default function StatsPage() {
         </p>
       )}
       {!stats && !error ? (
-        <p className="mt-10 text-sm text-[#777]" role="status">
+        <p className="mt-10 text-sm text-[#c8c2b9]" role="status">
           Loading statistics...
         </p>
       ) : (
@@ -58,12 +58,12 @@ export default function StatsPage() {
               ['Winrate', `${stats.winrate.toFixed(1)}%`],
             ].map(([label, value]) => (
               <article className="border border-white/10 bg-white/[.025] p-6" key={label}>
-                <p className="text-[10px] tracking-[.16em] text-[#777] uppercase">{label}</p>
+                <p className="text-sm tracking-[.16em] text-[#c8c2b9] uppercase">{label}</p>
                 <p className="mt-5 text-4xl font-light text-[#e8e5df]">{value}</p>
               </article>
             ))}
             <article className="border border-white/10 bg-white/[.025] p-6 sm:col-span-2 lg:col-span-5">
-              <p className="text-[10px] tracking-[.16em] text-[#777] uppercase">Average accuracy</p>
+              <p className="text-sm tracking-[.16em] text-[#c8c2b9] uppercase">Average accuracy</p>
               <p className="mt-5 text-4xl font-light text-[#e8e5df]">
                 {stats.averageAccuracy == null
                   ? 'Not analyzed'

@@ -92,7 +92,11 @@ export class StockfishService implements OnModuleDestroy {
     for (const child of this.processes) child.kill();
   }
 
-  async analyze(input: AnalyzePositionDto): Promise<Evaluation> {
+  async analyze(
+    input: AnalyzePositionDto,
+    searchMs = 2000,
+    history?: { initialFen: string; moves: string[] },
+  ): Promise<Evaluation> {
     const chess = validatePosition(input.fen);
     const depth = input.depth ?? 12;
     if (!Number.isInteger(depth) || depth < 1 || depth > 18)
@@ -176,7 +180,12 @@ export class StockfishService implements OnModuleDestroy {
           );
         if (line === 'readyok' && !ready) {
           ready = true;
-          child.stdin.write(`ucinewgame\nposition fen ${fen}\ngo depth ${depth} movetime 2000\n`);
+          const position = history
+            ? `position fen ${history.initialFen} moves ${history.moves.join(' ')}`
+            : `position fen ${fen}`;
+          child.stdin.write(
+            `ucinewgame\n${position}\ngo depth ${depth} movetime ${Math.max(100, Math.min(2000, searchMs))}\n`,
+          );
         }
         if (ready) evaluation = parseScore(line, chess.turn()) ?? evaluation;
         if (line.startsWith('bestmove ')) finish(undefined, line.split(/\s+/)[1]);

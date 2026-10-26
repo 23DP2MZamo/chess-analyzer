@@ -16,7 +16,7 @@ The response includes `engine`, normalized `fen`, `sideToMove`, `bestMove` (UCI 
 
 Depth defaults to 12 and must be an integer from 1 through 18. Each search has one thread, 16 MB hash, a two-second search limit and a 15-second total timeout. At most two engines run per backend process; further requests receive 429 and can retry. Invalid FEN/depth returns 400, missing authentication 401, engine failures 503 and timeouts 504. Processes are cleaned up after every request and on shutdown.
 
-Open `/analyze` while signed in to test a position in the UI. This is position analysis: it does not yet perform whole-PGN analysis, persist move evaluations, calculate accuracy or reconstruct repetition history. Existing accuracy values can be used by game-history sorting; new imports are shown as not analyzed until game analysis is implemented.
+Open `/analyze` while signed in to test a position in the UI. This endpoint is position analysis. For saved-game review, move evaluations and sample data, see UX-REVIEW-IMPORTS.md. Accuracy percentages are not calculated. Existing accuracy values can be used by game-history sorting; new imports can be reviewed with Analyze game; accuracy remains unset unless a stored accuracy value is available.
 
 Verification: `npm test -- --runInBand` includes the actual bundled engine (starting position, checkmate, stalemate and Black mating), validation, process lifecycle, timeout/concurrency and protected HTTP-boundary tests.
 

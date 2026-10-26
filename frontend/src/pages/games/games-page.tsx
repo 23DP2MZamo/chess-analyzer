@@ -1,9 +1,12 @@
+import ImportHelp from '../../components/import-help';
+import SampleGames from '../../components/sample-games';
 import { Fragment, useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { api, ApiError } from '../../lib/api';
 
 type Game = {
   id: string;
+  externalId?: string;
   platform: string;
   whiteUsername: string;
   blackUsername: string;
@@ -23,6 +26,7 @@ type Game = {
 type SearchResult = {
   items: Game[];
   total: number;
+  totalOwned?: number;
   page: number;
   pageSize: number;
   groups: { key: string; eco: string | null; name: string | null; count: number }[];
@@ -120,7 +124,7 @@ export default function GamesPage() {
   };
   function select(label: string, name: string, options: [string, string][], fallback = '') {
     return (
-      <label className="grid gap-2 text-xs text-[#aaa]">
+      <label className="grid gap-2 text-sm text-[#c8c2b9]">
         {label}
         <select
           className={selectClass}
@@ -138,16 +142,16 @@ export default function GamesPage() {
   }
   return (
     <main className="min-h-screen bg-[#1b1b1b] px-5 py-12 font-sans text-[#e8e5df] sm:px-[7vw] sm:py-16">
-      <Link to="/home" className="text-xs text-[#aaa] hover:text-white">
+      <Link to="/home" className="text-sm text-[#c8c2b9] hover:text-white">
         ← Home
       </Link>
       <header className="mt-8 flex flex-col justify-between gap-6 border-b border-white/10 pb-8 xl:flex-row xl:items-end">
         <div>
-          <p className="text-[10px] tracking-[.2em] text-[#d47440]">GAME HISTORY</p>
+          <p className="text-sm tracking-[.2em] text-[#d47440]">GAME HISTORY</p>
           <h1 className="mt-3 text-5xl font-light sm:text-7xl">Your games</h1>
         </div>
         <div className="flex flex-wrap items-end gap-3">
-          <label className="grid gap-2 text-xs text-[#aaa]">
+          <label className="grid gap-2 text-sm text-[#c8c2b9]">
             Latest Lichess games (1–300)
             <input
               aria-label="Lichess game limit"
@@ -167,7 +171,7 @@ export default function GamesPage() {
               key={platform}
               onClick={() => importGames(platform)}
               disabled={!!importing || (platform === 'LICHESS' && !validLimit)}
-              className="h-11 bg-[#a94e22] px-5 text-xs hover:bg-[#c25d2a] disabled:opacity-50"
+              className="h-11 bg-[#a94e22] px-5 text-sm hover:bg-[#c25d2a] disabled:opacity-50"
             >
               {importing === platform
                 ? 'Importing…'
@@ -176,6 +180,7 @@ export default function GamesPage() {
           ))}
         </div>
       </header>
+      <ImportHelp />
       <section
         aria-label="Game filters"
         className="my-6 grid gap-4 border border-white/10 bg-white/[.02] p-5 sm:grid-cols-2 lg:grid-cols-4"
@@ -206,7 +211,7 @@ export default function GamesPage() {
           ],
           'none',
         )}
-        <label className="grid gap-2 text-xs text-[#aaa]">
+        <label className="grid gap-2 text-sm text-[#c8c2b9]">
           From date (UTC)
           <input
             type="date"
@@ -215,7 +220,7 @@ export default function GamesPage() {
             onChange={(event) => change('dateFrom', event.target.value)}
           />
         </label>
-        <label className="grid gap-2 text-xs text-[#aaa]">
+        <label className="grid gap-2 text-sm text-[#c8c2b9]">
           Through date (UTC)
           <input
             type="date"
@@ -243,7 +248,7 @@ export default function GamesPage() {
           ],
           'desc',
         )}
-        <label className="grid gap-2 text-xs text-[#aaa] sm:col-span-2">
+        <label className="grid gap-2 text-sm text-[#c8c2b9] sm:col-span-2">
           Opening ECO / name
           <input
             className={selectClass}
@@ -257,12 +262,12 @@ export default function GamesPage() {
           <button
             type="button"
             onClick={() => setParams({})}
-            className="h-11 border border-white/20 px-5 text-xs hover:border-white/50"
+            className="h-11 border border-white/20 px-5 text-sm hover:border-white/50"
           >
             Reset filters
           </button>
         </div>
-        <p className="self-end text-xs leading-5 text-[#999]">
+        <p className="self-end text-sm leading-5 text-[#999]">
           Results, Elo, and accuracy use your linked account. Missing values appear last. Opening
           counts include all matching games.
         </p>
@@ -285,19 +290,19 @@ export default function GamesPage() {
         </p>
       )}
       {loading ? (
-        <p role="status" className="py-16 text-center text-[#aaa]">
+        <p role="status" className="py-16 text-center text-[#c8c2b9]">
           Loading games…
         </p>
       ) : (
         !visibleError && (
           <>
-            <p className="mb-4 text-xs text-[#aaa]" role="status">
+            <p className="mb-4 text-sm text-[#c8c2b9]" role="status">
               {data.total} matching games
             </p>
             {data.items.length === 0 ? (
               <div className="border border-white/10 p-10 text-center">
                 <p>No matching games</p>
-                <p className="mt-3 text-sm text-[#aaa]">
+                <p className="mt-3 text-sm text-[#c8c2b9]">
                   Adjust the filters or import games from a linked account.
                 </p>
                 <Link className="mt-5 inline-block text-sm text-[#d47440]" to="/profile">
@@ -307,7 +312,7 @@ export default function GamesPage() {
             ) : (
               <div className="overflow-x-auto border border-white/10">
                 <table className="w-full min-w-[950px] text-left text-sm">
-                  <thead className="text-xs text-[#aaa]">
+                  <thead className="text-sm text-[#c8c2b9]">
                     <tr>
                       {[
                         'Game',
@@ -330,21 +335,35 @@ export default function GamesPage() {
                         {params.get('groupBy') === 'opening' &&
                           (index === 0 || data.items[index - 1].groupKey !== game.groupKey) && (
                             <tr className="border-y border-white/10 bg-[#2b231e]">
-                              <th colSpan={7} className="p-4 text-xs font-normal text-[#e89b70]">
+                              <th colSpan={7} className="p-4 text-sm font-normal text-[#e89b70]">
                                 {groupLabel(game)}
                               </th>
                             </tr>
                           )}
                         <tr className="border-t border-white/10 text-[#bbb]">
                           <td className="p-4 text-[#eee]">
-                            {game.whiteUsername} <span className="text-[#777]">vs</span>{' '}
+                            {game.whiteUsername} <span className="text-[#bdb5ab]">vs</span>{' '}
                             {game.blackUsername}
-                            <p className="mt-1 text-[10px] text-[#888]">{game.platform}</p>
+                            <p className="mt-2 text-sm text-[#c3b9ad]">
+                              {game.platform}
+                              {game.externalId?.startsWith('sample-') && (
+                                <span className="ml-2 text-[#f3b187]">Sample game</span>
+                              )}
+                            </p>
+                            <Link
+                              to={'/analyze/games/' + encodeURIComponent(game.id)}
+                              className="mt-3 inline-flex min-h-11 cursor-pointer items-center border border-[#d58a59]/60 bg-[#53361f] px-4 py-2 text-base font-medium text-[#ffdbbd] transition hover:border-[#f3b187] hover:bg-[#724627] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#f3b187]"
+                            >
+                              Analyze game{' '}
+                              <span className="ml-2" aria-hidden="true">
+                                →
+                              </span>
+                            </Link>
                           </td>
                           <td className="p-4">{results[game.playerResult]}</td>
                           <td className="p-4">
                             {game.format}
-                            <p className="mt-1 text-xs text-[#888]">
+                            <p className="mt-1 text-sm text-[#bdb5ab]">
                               {game.mode} · {game.timeControl ?? '—'}
                             </p>
                           </td>
@@ -390,6 +409,7 @@ export default function GamesPage() {
                 Next
               </button>
             </nav>
+            {(data.totalOwned ?? data.total) === 0 && <SampleGames />}
           </>
         )
       )}

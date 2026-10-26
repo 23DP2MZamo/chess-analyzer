@@ -13,7 +13,7 @@ const features = [
         your game
       </>
     ),
-    description: 'Upload a PGN or enter a position and let the engine analyze every move.',
+    description: 'Choose an imported game for a move-by-move review, or try a sample position.',
     href: '/analyze',
     linkLabel: 'Start analysis',
     featured: true,
@@ -60,7 +60,7 @@ export default function HomePage() {
       <header className="relative z-20 flex h-[58px] items-center justify-between border-b border-white/8 px-[18px] sm:h-16 sm:px-7">
         <Link
           to="/home"
-          className="flex items-center gap-2.5 text-[9px] font-medium tracking-[.18em] text-[#e8e5df] no-underline sm:text-[11px]"
+          className="flex items-center gap-2.5 text-xs font-medium tracking-[.18em] text-[#e8e5df] no-underline sm:text-base"
           onClick={closeMenu}
         >
           <span className="text-[17px] opacity-80">♞</span>
@@ -77,10 +77,10 @@ export default function HomePage() {
               to={`/${item.toLowerCase()}`}
               end={item === 'Home'}
               className={({ isActive }) =>
-                `relative text-[11px] tracking-[.12em] no-underline transition-colors duration-200 hover:text-[#e8e5df] ${
+                `relative text-sm tracking-[.12em] no-underline transition-colors duration-200 hover:text-[#e8e5df] ${
                   isActive
                     ? "text-[#e8e5df] after:absolute after:right-0 after:-bottom-[23px] after:left-0 after:h-px after:bg-[#e8e5df] after:content-['']"
-                    : 'text-[#777]'
+                    : 'text-[#bfb9b0]'
                 }`
               }
             >
@@ -89,7 +89,7 @@ export default function HomePage() {
           ))}
           <Link
             to={accountPath}
-            className="inline-flex min-h-9 items-center border border-[#c56531]/70 px-4 text-[11px] tracking-[.12em] text-[#e8e5df] transition-colors hover:bg-[#a94e22] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#d47440]"
+            className="inline-flex min-h-9 items-center border border-[#c56531]/70 px-4 text-sm tracking-[.12em] text-[#e8e5df] transition-colors hover:bg-[#a94e22] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#d47440]"
           >
             {accountLabel}
           </Link>
@@ -98,7 +98,7 @@ export default function HomePage() {
         <div className="ml-auto mr-4 sm:hidden">
           <Link
             to={accountPath}
-            className="inline-flex min-h-9 items-center border border-[#c56531]/70 px-3 text-[10px] tracking-[.1em] text-[#e8e5df] hover:bg-[#a94e22]"
+            className="inline-flex min-h-9 items-center border border-[#c56531]/70 px-3 text-sm tracking-[.1em] text-[#e8e5df] hover:bg-[#a94e22]"
             onClick={closeMenu}
           >
             {accountLabel}
@@ -146,8 +146,8 @@ export default function HomePage() {
               end={item === 'Home'}
               onClick={closeMenu}
               className={({ isActive }) =>
-                `border-b border-white/6 px-3 py-[15px] text-[10px] tracking-[.16em] no-underline uppercase transition-colors last:border-b-0 hover:text-[#e8e5df] ${
-                  isActive ? 'text-[#e8e5df]' : 'text-[#888]'
+                `border-b border-white/6 px-3 py-[15px] text-sm tracking-[.16em] no-underline uppercase transition-colors last:border-b-0 hover:text-[#e8e5df] ${
+                  isActive ? 'text-[#e8e5df]' : 'text-[#c7c0b7]'
                 }`
               }
             >
@@ -159,7 +159,7 @@ export default function HomePage() {
 
       <section className="relative flex min-h-[620px] items-start overflow-hidden border-b border-white/7 px-7 py-[75px] sm:min-h-[570px] sm:items-center sm:px-[7vw] sm:py-[100px] lg:min-h-[620px] lg:px-[8vw]">
         <div className="relative z-10 max-w-[650px]">
-          <p className="mb-6 text-[8px] tracking-[.25em] text-[#777] sm:mb-[30px] sm:text-[10px]">
+          <p className="mb-6 text-[8px] tracking-[.25em] text-[#bfb9b0] sm:mb-[30px] sm:text-base">
             CHESS ANALYSIS PLATFORM
           </p>
 
@@ -169,7 +169,7 @@ export default function HomePage() {
             <span className="text-transparent [-webkit-text-stroke:1px_#aaa]">ANALYZER</span>
           </h1>
 
-          <p className="mt-[35px] mb-8 text-xs leading-[1.7] tracking-[.02em] text-[#858585] sm:mt-[42px] sm:text-sm">
+          <p className="mt-[35px] mb-8 text-base leading-[1.7] tracking-[.02em] text-[#ccc5bc] sm:mt-[42px] sm:text-base">
             Analyze your games. Find your mistakes.
             <br />
             Improve your chess.
@@ -178,14 +178,14 @@ export default function HomePage() {
           <div className="flex w-full max-w-[300px] flex-col items-stretch gap-3 sm:max-w-none sm:flex-row sm:items-center">
             <Link
               to="/analyze"
-              className="flex h-[46px] w-full items-center justify-center gap-5 bg-[#e5e1d9] px-5 text-[11px] tracking-[.1em] text-[#171717] no-underline transition-colors duration-200 hover:bg-white sm:w-auto"
+              className="flex h-[46px] w-full items-center justify-center gap-5 bg-[#e5e1d9] px-5 text-sm tracking-[.1em] text-[#171717] no-underline transition-colors duration-200 hover:bg-white sm:w-auto"
             >
               Analyze a game
               <span className="text-base">→</span>
             </Link>
             <Link
               to="/games"
-              className="flex h-[46px] w-full items-center justify-center border border-white/12 px-5 text-[11px] tracking-[.1em] text-[#aaa] no-underline transition-colors duration-200 hover:border-white/30 hover:text-white sm:w-auto"
+              className="flex h-[46px] w-full items-center justify-center border border-white/12 px-5 text-sm tracking-[.1em] text-[#aaa] no-underline transition-colors duration-200 hover:border-white/30 hover:text-white sm:w-auto"
             >
               View games
             </Link>
@@ -220,35 +220,37 @@ export default function HomePage() {
         </div>
       </section>
 
-      <section className="grid grid-cols-1 gap-3 px-[18px] py-[45px] sm:grid-cols-2 sm:px-[7vw] sm:py-[70px] min-[901px]:grid-cols-[2fr_1fr_1fr]">
+      <section className="grid grid-cols-1 gap-3 px-[18px] py-[45px] sm:grid-cols-2 sm:px-[7vw] sm:py-[70px] lg:grid-cols-[2fr_1fr_1fr]">
         {features.map((feature) => (
-          <article
+          <Link
             key={feature.number}
-            className={`relative min-h-[320px] border border-white/7 bg-white/[.025] p-[26px] transition duration-200 hover:-translate-y-[3px] hover:border-white/14 hover:bg-white/[.04] sm:min-h-[350px] ${
-              feature.featured ? 'sm:col-span-2 sm:min-h-[430px] min-[901px]:col-span-1' : ''
-            }`}
+            to={feature.href}
+            aria-label={feature.linkLabel}
+            className={`group flex min-h-[340px] cursor-pointer flex-col border border-white/20 bg-[#242321] p-7 text-[#f2efea] no-underline transition duration-200 hover:-translate-y-1 hover:border-[#e89b70] hover:bg-[#302820] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#f3b187] motion-reduce:transform-none sm:p-8 ${feature.featured ? 'sm:col-span-2 lg:col-span-1' : ''}`}
           >
-            <span className="text-[10px] tracking-[.15em] text-[#555]">{feature.number}</span>
-            <div className="absolute right-[26px] bottom-[26px] left-[26px]">
-              <p className="mb-[15px] text-[9px] tracking-[.22em] text-[#777]">{feature.label}</p>
-              <h2 className="mb-5 text-[38px] leading-[.95] font-light tracking-[-.04em] text-[#ddd] sm:text-[clamp(28px,3vw,48px)]">
+            <span className="text-sm tracking-[.15em] text-[#bfb5a9]">{feature.number}</span>
+            <div className="mt-8 flex flex-1 flex-col">
+              <p className="mb-4 text-sm font-medium tracking-[.16em] text-[#edb38e]">
+                {feature.label}
+              </p>
+              <h2 className="mb-5 text-4xl leading-tight font-light tracking-[-.03em] text-[#f6f2ec]">
                 {feature.title}
               </h2>
-              <p className="mb-[25px] max-w-[300px] text-xs leading-[1.6] text-[#777]">
+              <p className="mb-7 max-w-sm text-base leading-7 text-[#d1cac0]">
                 {feature.description}
               </p>
-              <Link
-                to={feature.href}
-                className="text-[10px] tracking-[.1em] text-[#aaa] no-underline transition-colors duration-200 hover:text-white"
-              >
-                {feature.linkLabel} <span className="ml-2 text-[13px]">↗</span>
-              </Link>
+              <span className="mt-auto text-base font-medium text-[#edb38e] transition-colors group-hover:text-white">
+                {feature.linkLabel}{' '}
+                <span className="ml-2" aria-hidden="true">
+                  ↗
+                </span>
+              </span>
             </div>
-          </article>
-        ))}
+          </Link>
+        ))}{' '}
       </section>
 
-      <footer className="flex min-h-20 flex-col items-start justify-center gap-2.5 border-t border-white/6 px-[18px] py-[25px] text-[9px] tracking-[.18em] text-[#555] sm:flex-row sm:items-center sm:justify-between sm:gap-0 sm:px-[7vw] sm:py-0">
+      <footer className="flex min-h-20 flex-col items-start justify-center gap-2.5 border-t border-white/6 px-[18px] py-[25px] text-xs tracking-[.18em] text-[#b0a89e] sm:flex-row sm:items-center sm:justify-between sm:gap-0 sm:px-[7vw] sm:py-0">
         <span>CHESS ANALYZER</span>
         <span>BUILT FOR CHESS PLAYERS</span>
         <span>2026</span>

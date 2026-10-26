@@ -76,4 +76,18 @@ describe('Position analysis', () => {
     await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument());
     expect(await screen.findByText('+0.35')).toBeInTheDocument();
   });
+  it('loads a preset instantly and explains invalid FEN and export instructions', async () => {
+    open();
+    await userEvent.click(screen.getByRole('button', { name: 'Find mate in one' }));
+    expect(screen.getByLabelText('FEN position')).toHaveValue('7k/5Q2/6K1/8/8/8/8/8 w - - 0 1');
+    await userEvent.clear(screen.getByLabelText('FEN position'));
+    await userEvent.type(screen.getByLabelText('FEN position'), 'https://chess.com/game/live/123');
+    expect(screen.getByRole('alert')).toHaveTextContent('This is a link');
+    expect(screen.getByRole('button', { name: 'Analyze position' })).toBeDisabled();
+    await userEvent.click(screen.getByText('What is FEN? How do I copy a position?'));
+    expect(screen.getByRole('link', { name: 'Chess.com FEN / PGN guide ↗' })).toBeVisible();
+    expect(
+      screen.getByRole('link', { name: /Analyze one of your imported games/ }),
+    ).toHaveAttribute('href', '/games');
+  });
 });

@@ -24,6 +24,7 @@ describe('PostgreSQL profile and duplicate prevention', () => {
     for (const name of [
       '20260907182218_chess_migration',
       '20261020110400_user_scoped_game_uniqueness',
+      '20261026120000_admin_user_management',
     ]) {
       await sql.query(
         readFileSync(resolve(__dirname, '../prisma/migrations', name, 'migration.sql'), 'utf8'),

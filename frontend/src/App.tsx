@@ -6,6 +6,7 @@ import LoginPage from './pages/auth/login-page';
 import SignupPage from './pages/auth/signup-page';
 import ProfilePage from './pages/profile/profile-page';
 import ToolPage from './pages/tool-page';
+import GameReviewPage from './pages/game-review-page';
 import GamesPage from './pages/games/games-page';
 import StatsPage from './pages/stats/stats-page';
 
@@ -21,6 +22,7 @@ function App() {
           <Route element={<RequireAuth />}>
             <Route path="/profile" element={<ProfilePage />} />
             <Route path="/analyze" element={<ToolPage />} />
+            <Route path="/analyze/games/:gameId" element={<GameReviewPage />} />
             <Route path="/games" element={<GamesPage />} />
             <Route path="/stats" element={<StatsPage />} />
           </Route>

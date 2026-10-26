@@ -95,4 +95,32 @@ describe('Game history filters', () => {
     });
     await waitFor(() => expect(mockApi).toHaveBeenLastCalledWith('/games/search?format=BLITZ'));
   });
+  it('provides a direct game analysis action and a clearly labeled empty-library sample preview', async () => {
+    open();
+    expect(await screen.findByRole('link', { name: /Analyze game/ })).toHaveAttribute(
+      'href',
+      '/analyze/games/game1',
+    );
+  });
+  it('shows samples separately from personal history when no games have been synced', async () => {
+    mockApi.mockImplementation(async (path) =>
+      path === '/analysis/samples'
+        ? [
+            {
+              id: 'sample-scholar',
+              title: 'A quick mating attack',
+              opening: 'King’s Pawn Game',
+              format: 'BLITZ',
+            },
+          ]
+        : { items: [], total: 0, totalOwned: 0, page: 1, pageSize: 25, groups: [] },
+    );
+    open();
+    expect(await screen.findByRole('link', { name: /Analyze sample/ })).toHaveAttribute(
+      'href',
+      '/analyze/games/sample-scholar',
+    );
+    expect(screen.getByText(/These are practice games/)).toBeInTheDocument();
+    expect(screen.getByText('0 matching games')).toBeInTheDocument();
+  });
 });
