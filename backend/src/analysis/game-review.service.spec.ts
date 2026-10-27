@@ -79,6 +79,22 @@ describe('Game review', () => {
       classification: 'BEST',
     });
   });
+  it('invalidates legacy reviews and sorts versioned saved rows in chess turn order', async () => {
+    db.analysis.findUnique.mockResolvedValue({ engine: 'Stockfish', moves: [{ san: 'e4' }] });
+    expect(await service.status('owner', game.id)).toMatchObject({ status: 'idle' });
+    db.analysis.findUnique.mockResolvedValue({
+      engine: 'Stockfish [review-v2]',
+      moves: [
+        { moveNumber: 2, color: 'WHITE', san: 'Nf3' },
+        { moveNumber: 1, color: 'BLACK', san: 'e5' },
+        { moveNumber: 1, color: 'WHITE', san: 'e4' },
+      ],
+    });
+    const state = (await service.status('owner', game.id)) as {
+      result: { moves: { san: string }[] };
+    };
+    expect(state.result.moves.map((move) => move.san)).toEqual(['e4', 'e5', 'Nf3']);
+  });
   it('deduplicates an active review and limits other jobs for the same user', async () => {
     engine.analyze.mockImplementation(() => new Promise(() => {}));
     await service.start('owner', game.id);
@@ -139,10 +155,10 @@ describe('Game review', () => {
       'BLUNDER',
     );
     expect(classifyMove(black, evaluate(black.before, 0), evaluate(black.after, 250))).toBe(
-      'MISTAKE',
+      'BLUNDER',
     );
     expect(classifyMove(black, evaluate(black.before, 0), evaluate(black.after, -250))).toBe(
-      'GOOD',
+      'EXCELLENT',
     );
   });
 });

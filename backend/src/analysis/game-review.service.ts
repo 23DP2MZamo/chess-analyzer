@@ -10,7 +10,11 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { Color, MoveClassification } from '../../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { StockfishService, type Evaluation } from './stockfish.service';
+import { chanceLoss, moveAccuracy, meanAccuracy } from './review-scoring';
+
 import { sampleGame } from '../games/sample-games';
+
+const REVIEW_VERSION = '[review-v2]';
 
 type ReviewedMove = {
   moveNumber: number;
@@ -27,6 +31,8 @@ type ReviewedMove = {
 type Review = {
   engine: string;
   depth: number;
+  accuracyWhite: number | null;
+  accuracyBlack: number | null;
   blunderCount: number;
   mistakeCount: number;
   inaccuracyCount: number;
@@ -69,22 +75,23 @@ export function readGame(pgn: string) {
   return moves;
 }
 
-function scoreCp(evaluation: Evaluation) {
-  if (evaluation.score.type === 'cp') return evaluation.score.value;
-  if (evaluation.score.value === 0) return evaluation.sideToMove === 'white' ? -30000 : 30000;
-  return (
-    Math.sign(evaluation.score.value) * (30000 - Math.min(999, Math.abs(evaluation.score.value)))
-  );
-}
 export function classifyMove(
   move: Move,
   before: Evaluation,
   after: Evaluation,
 ): MoveClassification {
-  if (before.bestMove === move.from + move.to + (move.promotion ?? '')) return 'BEST';
   if (new Chess(move.before).moves().length === 1) return 'FORCED';
-  const loss = Math.max(0, (scoreCp(before) - scoreCp(after)) * (move.color === 'w' ? 1 : -1));
-  return loss >= 300 ? 'BLUNDER' : loss >= 200 ? 'MISTAKE' : loss >= 100 ? 'INACCURACY' : 'GOOD';
+  if (before.bestMove === move.from + move.to + (move.promotion ?? '')) return 'BEST';
+  const loss = chanceLoss(move.color, before, after);
+  return loss >= 20
+    ? 'BLUNDER'
+    : loss >= 10
+      ? 'MISTAKE'
+      : loss >= 5
+        ? 'INACCURACY'
+        : loss >= 2
+          ? 'GOOD'
+          : 'EXCELLENT';
 }
 
 @Injectable()
@@ -149,12 +156,19 @@ export class GameReviewService implements OnModuleDestroy {
           where: { gameId: id },
           include: { moves: { orderBy: [{ moveNumber: 'asc' }, { color: 'asc' }] } },
         });
-    if (saved?.moves.length)
+    if (saved?.moves.length && saved.engine.includes(REVIEW_VERSION))
       return {
         status: 'completed',
         completed: saved.moves.length,
         total: saved.moves.length,
-        result: saved,
+        result: {
+          ...saved,
+          moves: [...saved.moves].sort(
+            (a, b) =>
+              a.moveNumber - b.moveNumber ||
+              (a.color === b.color ? 0 : a.color === 'WHITE' ? -1 : 1),
+          ),
+        },
       };
     return { status: 'idle', completed: 0, total: 0 };
   }
@@ -209,7 +223,7 @@ export class GameReviewService implements OnModuleDestroy {
   private async evaluate(fen: string, history?: { initialFen: string; moves: string[] }) {
     for (let attempt = 0; ; attempt++) {
       try {
-        return await this.engine.analyze({ fen, depth: 10 }, 250, history);
+        return await this.engine.analyze({ fen, depth: 14 }, 1000, history);
       } catch (error) {
         if (
           !(error instanceof HttpException) ||
@@ -227,6 +241,7 @@ export class GameReviewService implements OnModuleDestroy {
       const history = { initialFen: moves[0].before, moves: [] as string[] };
       let before = await this.evaluate(moves[0].before, history);
       const reviewed: ReviewedMove[] = [];
+      const accuracy = { w: [] as number[], b: [] as number[] };
       let minimumDepth = before.depth;
       for (const move of moves) {
         if (job.status !== 'running' || this.closing) return;
@@ -235,6 +250,14 @@ export class GameReviewService implements OnModuleDestroy {
         const after = await this.evaluate(move.after, history);
         if (job.status !== 'running' || this.closing) return;
         if (after.depth > 0) minimumDepth = Math.min(minimumDepth, after.depth);
+        const classification = classifyMove(move, before, after);
+        accuracy[move.color].push(
+          moveAccuracy(
+            classification === 'BEST' || classification === 'FORCED'
+              ? 0
+              : chanceLoss(move.color, before, after),
+          ),
+        );
         reviewed.push({
           moveNumber: Number(move.before.split(' ')[5]),
           color: move.color === 'w' ? 'WHITE' : 'BLACK',
@@ -245,13 +268,15 @@ export class GameReviewService implements OnModuleDestroy {
           evalAfterCp: after.score.type === 'cp' ? after.score.value : null,
           mateIn: after.score.type === 'mate' ? after.score.value : null,
           bestMove: before.bestMove,
-          classification: classifyMove(move, before, after),
+          classification,
         });
         before = after;
         job.completed++;
       }
       const result: Review = {
-        engine: before.engine,
+        engine: before.engine + ' ' + REVIEW_VERSION,
+        accuracyWhite: meanAccuracy(accuracy.w),
+        accuracyBlack: meanAccuracy(accuracy.b),
         depth: minimumDepth,
         blunderCount: reviewed.filter((move) => move.classification === 'BLUNDER').length,
         mistakeCount: reviewed.filter((move) => move.classification === 'MISTAKE').length,

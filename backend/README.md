@@ -73,3 +73,28 @@ partijas rezultāts ir nezināms un netiek pieskaitīts zaudējumiem.
 Ja aizsargāta pieprasījuma laikā redzams `Unknown field isBlocked`, jāatjaunina Prisma
 klients un migrācijas ar iepriekšējās sadaļas komandām un jāpārstartē backend process.
 `isBlocked` jāpaliek autentifikācijas pārbaudē, lai bloķēti konti nevarētu piekļūt sistēmai.
+
+## Game review scoring (review-v2)
+
+Game reviews target depth 14 with a 1-second search limit per position; the report
+shows the minimum completed depth. Played-move history is passed to Stockfish so
+repetition is preserved. Scores are consistently from White's perspective.
+
+Move labels use loss in estimated winning percentage for the player who moved:
+5 percentage points = inaccuracy, 10 = mistake, 20 = blunder. A best engine move is
+BEST, a single legal move is FORCED. Other moves losing less than 2 points are
+EXCELLENT, otherwise GOOD. This avoids treating a 300-centipawn change in a heavily
+won/lost position the same as a 300-centipawn change in an equal position.
+
+Win percentage and individual move accuracy use the documented curves at
+https://lichess.org/page/accuracy. The displayed per-player **estimated accuracy**
+is a simple arithmetic mean of move accuracies. It is not Chess.com's proprietary
+accuracy or Lichess's volatility-weighted/harmonic game aggregate. Forced/best
+moves receive 100; a player with no moves has no accuracy value. No brilliant,
+missed-chance or opening-book classification is invented without a detector.
+
+Completed reviews carry `[review-v2]` in their engine metadata. Old cached reviews
+return idle and are recalculated when opened; replacement is atomic, leaving the
+previous result intact if the new run fails. The UI also provides Reanalyze game.
+The report separates White and Black counts and uses the game's actual fullmove
+numbers (including games starting from a FEN).

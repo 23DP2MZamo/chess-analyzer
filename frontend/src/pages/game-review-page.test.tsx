@@ -93,3 +93,66 @@ describe('Imported game review', () => {
     await waitFor(() => expect(screen.getByText('Review complete')).toBeInTheDocument());
   });
 });
+
+describe('Player report and clear engine feedback', () => {
+  it('separates player counts, displays computed accuracy and converts suggested moves to SAN', async () => {
+    const status = {
+      ...completed,
+      result: { ...completed.result, accuracyWhite: 98.2, accuracyBlack: null },
+    };
+    mockApi.mockImplementation(async (path) => (path.endsWith('/status') ? status : game));
+    open();
+    await screen.findByText('Review complete');
+    expect(screen.getByText('98.2%')).toBeInTheDocument();
+    expect(screen.getByLabelText('Best: White 1, Black 0')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Next move' }));
+    const feedback = screen.getByRole('region', { name: 'Move feedback' });
+    expect(feedback).toHaveTextContent('Engine’s suggested move before this turn: e4');
+    expect(feedback).not.toHaveTextContent('e2e4');
+    expect(screen.getByRole('button', { name: 'Reanalyze game' })).toBeEnabled();
+  });
+  it('explains who has a forced mate instead of an ambiguous signed mate score', async () => {
+    const status = {
+      ...completed,
+      result: {
+        ...completed.result,
+        moves: [{ ...completed.result.moves[0], mateIn: -3, evalAfterCp: null }],
+      },
+    };
+    mockApi.mockImplementation(async (path) => (path.endsWith('/status') ? status : game));
+    open();
+    await screen.findByText('Review complete');
+    await userEvent.click(screen.getByRole('button', { name: 'Next move' }));
+    expect(screen.getByRole('region', { name: 'Move feedback' })).toHaveTextContent(
+      'Black can force mate in 3',
+    );
+  });
+});
+
+describe('Review panel view switch', () => {
+  it('switches between summary and moves in one panel and preserves the selected position', async () => {
+    mockApi.mockImplementation(async (path) => (path.endsWith('/status') ? completed : game));
+    open();
+    await screen.findByText('Review complete');
+    const user = userEvent.setup();
+    const summary = screen.getByRole('tab', { name: 'Summary' });
+    const moves = screen.getByRole('tab', { name: 'Moves' });
+    expect(summary).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tabpanel', { name: 'Summary' })).toBeVisible();
+    expect(screen.queryByRole('tabpanel', { name: 'Moves' })).not.toBeInTheDocument();
+    await user.click(moves);
+    expect(screen.getByRole('tabpanel', { name: 'Moves' })).toBeVisible();
+    expect(screen.queryByRole('tabpanel', { name: 'Summary' })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /e4.*best/ }));
+    expect(screen.getByRole('region', { name: 'Move feedback' })).toHaveTextContent('e4 · best');
+    await user.click(summary);
+    expect(screen.getByRole('region', { name: 'Move feedback' })).toHaveTextContent('e4 · best');
+    await user.keyboard('{ArrowRight}');
+    expect(moves).toHaveFocus();
+    expect(moves).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('button', { name: /e4.*best/ })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+  });
+});

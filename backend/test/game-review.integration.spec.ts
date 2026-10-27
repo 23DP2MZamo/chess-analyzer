@@ -87,7 +87,9 @@ describe('Stored sample games and full game review', () => {
       include: { moves: true },
     });
     expect(saved.moves).toHaveLength(4);
-    expect(saved.accuracyWhite).toBeNull();
+    expect(saved.accuracyWhite).toBe(100);
+    expect(saved.accuracyBlack).toBe(100);
+    expect(saved.engine).toContain('[review-v2]');
     const reopened = new GameReviewService(db, engine as unknown as StockfishService);
     const reopenedState = await reopened.status(owner.id, game.id);
     if (reopenedState.status !== 'completed' || !('result' in reopenedState))
