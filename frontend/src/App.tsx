@@ -9,6 +9,8 @@ import ToolPage from './pages/tool-page';
 import GameReviewPage from './pages/game-review-page';
 import GamesPage from './pages/games/games-page';
 import StatsPage from './pages/stats/stats-page';
+import AdminPage from './pages/admin/admin-page';
+import RequireAdmin from './layouts/require-admin';
 
 function App() {
   return (
@@ -25,6 +27,9 @@ function App() {
             <Route path="/analyze/games/:gameId" element={<GameReviewPage />} />
             <Route path="/games" element={<GamesPage />} />
             <Route path="/stats" element={<StatsPage />} />
+          </Route>
+          <Route element={<RequireAdmin />}>
+            <Route path="/admin" element={<AdminPage />} />
           </Route>
         </Route>
         <Route path="*" element={<Navigate to="/login" replace />} />
