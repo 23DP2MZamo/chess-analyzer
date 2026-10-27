@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { Client } from 'pg';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '../generated/prisma/client';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { GamesService } from '../src/games/games.service';
@@ -21,11 +21,9 @@ describe('PostgreSQL profile and duplicate prevention', () => {
     await sql.connect();
     await sql.query('CREATE SCHEMA "' + schema + '"');
     await sql.query('SET search_path TO "' + schema + '"');
-    for (const name of [
-      '20260907182218_chess_migration',
-      '20261020110400_user_scoped_game_uniqueness',
-      '20261026120000_admin_user_management',
-    ]) {
+    for (const name of readdirSync(resolve(__dirname, '../prisma/migrations'))
+      .filter((name) => /^\d/.test(name))
+      .sort()) {
       await sql.query(
         readFileSync(resolve(__dirname, '../prisma/migrations', name, 'migration.sql'), 'utf8'),
       );
@@ -174,5 +172,108 @@ describe('PostgreSQL profile and duplicate prevention', () => {
     }
     expect(reachedEnd).toBe(true);
     expect(await db.user.count({ where: { id: { in: ids } } })).toBe(0);
+  }, 30000);
+  it('keeps ECO siblings unique by name and links the exact variation without guessing', async () => {
+    let reachedEnd = false;
+    try {
+      await db.$transaction(
+        async (tx) => {
+          const owner = await tx.user.create({
+            data: {
+              username: 'opening-owner',
+              email: 'openings@example.test',
+              passwordHash: 'fixture',
+            },
+          });
+          const other = await tx.user.create({
+            data: {
+              username: 'other-owner',
+              email: 'other-opening@example.test',
+              passwordHash: 'fixture',
+            },
+          });
+          await tx.linkedAccount.create({
+            data: { userId: owner.id, platform: 'CHESSCOM', platformUsername: 'OpeningPlayer' },
+          });
+          const base = await tx.opening.upsert({
+            where: { eco_name: { eco: 'B20', name: 'Sicilian Defense' } },
+            create: { eco: 'B20', name: 'Sicilian Defense' },
+            update: {},
+          });
+          const variation = await tx.opening.upsert({
+            where: { eco_name: { eco: 'B20', name: 'Sicilian Defense: Wing Gambit' } },
+            create: { eco: 'B20', name: 'Sicilian Defense: Wing Gambit' },
+            update: {},
+          });
+          expect(
+            (
+              await tx.opening.upsert({
+                where: { eco_name: { eco: 'B20', name: variation.name } },
+                create: { eco: 'B20', name: variation.name },
+                update: {},
+              })
+            ).id,
+          ).toBe(variation.id);
+          expect(await tx.opening.count({ where: { eco: 'B20' } })).toBe(2);
+          const fixture = {
+            platform: 'CHESSCOM' as const,
+            whiteUsername: 'OpeningPlayer',
+            blackUsername: 'Opponent',
+            result: 'WHITE_WIN' as const,
+            format: 'BLITZ' as const,
+            mode: 'RATED' as const,
+            playedAt: new Date(),
+            openingId: base.id,
+          };
+          const exact = await tx.game.create({
+            data: {
+              ...fixture,
+              userId: owner.id,
+              externalId: 'exact',
+              pgn: '[ECO "B20"]\n[Opening "Sicilian Defense"]\n[Variation "Wing Gambit"]',
+            },
+          });
+          const ambiguous = await tx.game.create({
+            data: { ...fixture, userId: owner.id, externalId: 'ambiguous', pgn: '[ECO "B20"]' },
+          });
+          const unmatched = await tx.game.create({
+            data: {
+              ...fixture,
+              userId: owner.id,
+              externalId: 'unmatched',
+              pgn: '[ECO "B20"]\n[Opening "Unknown variation"]',
+            },
+          });
+          const untouched = await tx.game.create({
+            data: { ...fixture, userId: other.id, externalId: 'other', pgn: exact.pgn },
+          });
+          const chesscom = { getGameArchives: jest.fn().mockResolvedValue({ archives: [] }) };
+          const imports = new GamesService(
+            tx as unknown as PrismaService,
+            chesscom as unknown as ChessComClient,
+            {} as LichessClient,
+          );
+          expect(await imports.importChessComGames(owner.id)).toEqual({ imported: 0, skipped: 0 });
+          expect((await tx.game.findUniqueOrThrow({ where: { id: exact.id } })).openingId).toBe(
+            variation.id,
+          );
+          expect(
+            (await tx.game.findUniqueOrThrow({ where: { id: ambiguous.id } })).openingId,
+          ).toBeNull();
+          expect(
+            (await tx.game.findUniqueOrThrow({ where: { id: unmatched.id } })).openingId,
+          ).toBeNull();
+          expect((await tx.game.findUniqueOrThrow({ where: { id: untouched.id } })).openingId).toBe(
+            base.id,
+          );
+          reachedEnd = true;
+          throw rollback;
+        },
+        { timeout: 20000 },
+      );
+    } catch (error) {
+      if (error !== rollback) throw error;
+    }
+    expect(reachedEnd).toBe(true);
   }, 30000);
 });

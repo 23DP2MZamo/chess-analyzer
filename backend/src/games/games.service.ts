@@ -12,7 +12,8 @@ import { ChessComClient, type ChessComGame } from '../accounts/chesscom.client';
 import { LichessClient } from '../accounts/lichess.client';
 import { PrismaService } from '../prisma/prisma.service';
 import { mapChessComGame } from './chesscom-game.mapper';
-import { parsePgn } from './pgn.parser';
+import { parsePgnOpening } from './pgn.parser';
+import { matchOpening } from './opening-matcher';
 import { mapLichessGame } from './lichess-game.mapper';
 
 const INSERT_BATCH_SIZE = 100;
@@ -201,60 +202,33 @@ export class GamesService {
 
   private async linkOpenings(userId: string): Promise<void> {
     const games = await this.prismaService.game.findMany({
-      where: {
-        userId,
-        openingId: null,
-      },
-      select: {
-        id: true,
-        pgn: true,
-      },
+      where: { userId },
+      select: { id: true, pgn: true, openingId: true },
     });
-
     const gamesWithEco = games
-      .map((game) => ({
-        id: game.id,
-        eco: parsePgn(game.pgn).eco,
-      }))
-      .filter((game): game is { id: string; eco: string } => game.eco !== null);
-
-    if (gamesWithEco.length === 0) {
-      return;
-    }
-
+      .map((game) => ({ ...game, ...parsePgnOpening(game.pgn) }))
+      .filter((game): game is typeof game & { eco: string } => game.eco !== null);
+    if (!gamesWithEco.length) return;
     const openings = await this.prismaService.opening.findMany({
-      where: {
-        eco: {
-          in: [...new Set(gamesWithEco.map((game) => game.eco))],
-        },
-      },
-      select: {
-        id: true,
-        eco: true,
-      },
+      where: { eco: { in: [...new Set(gamesWithEco.map((game) => game.eco))] } },
+      select: { id: true, eco: true, name: true },
     });
-
-    const openingIds = new Map(openings.map((opening) => [opening.eco, opening.id]));
-
+    const openingsByEco = new Map<string, typeof openings>();
+    for (const opening of openings) {
+      const group = openingsByEco.get(opening.eco) ?? [];
+      group.push(opening);
+      openingsByEco.set(opening.eco, group);
+    }
     for (const game of gamesWithEco) {
-      const openingId = openingIds.get(game.eco);
-
-      if (!openingId) {
-        continue;
-      }
-
+      const openingId = matchOpening(openingsByEco.get(game.eco) ?? [], game.eco, game.name);
+      if (openingId === game.openingId) continue;
+      // A reimport also repairs old ECO-only links; don't overwrite a concurrent change.
       await this.prismaService.game.updateMany({
-        where: {
-          id: game.id,
-          openingId: null,
-        },
-        data: {
-          openingId,
-        },
+        where: { id: game.id, userId, openingId: game.openingId },
+        data: { openingId },
       });
     }
   }
-
   private readonly activeImports = new Set<string>();
 
   async importLichessGames(
@@ -304,6 +278,7 @@ export class GamesService {
           if (!existing) throw error;
         }
       }
+      await this.linkOpenings(userId);
       return { imported, skipped: Math.min(games.length, limit) - imported };
     } finally {
       this.activeImports.delete(userId);

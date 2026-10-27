@@ -14,8 +14,8 @@ Visiem tālāk minētajiem maršrutiem nepieciešama autentificēta sesija:
 - `POST /games/chesscom/import` nolasa piesaistītā konta arhīvus, saglabā partijas un atgriež
   `{ "imported": 12, "skipped": 3 }`. Atkārtots imports izlaiž šim lietotājam jau saglabātās
   partijas.
-- `POST /games/lichess/import` nolasa piesaistītā konta publisko spēļu vēsturi pa Lichess API
-  lapām, pārveido PGN un saglabā partijas tajā pašā `games` tabulā ar platformu `LICHESS`.
+- `POST /games/lichess/import` nolasa piesaistītā konta jaunākās pabeigtās partijas no Lichess API, pārveido PGN un saglabā partijas tajā pašā `games` tabulā ar platformu `LICHESS`.
+  Body lauks `limit` ir vesels skaitlis 1–300; pēc noklusējuma importē 100 jaunākās partijas.
   Atbildei ir tāds pats `{ "imported": 12, "skipped": 3 }` formāts.
 
 Chess.com mēnešu arhīvi tiek ielādēti secīgi hronoloģiskā secībā (no vecākā uz jaunāko).
@@ -54,6 +54,36 @@ ielādi un atbrīvo importa bloķējumu. Datu unikālitāti nodrošina DB atslē
 
 API atbildes tiek pārbaudītas pirms saglabāšanas; arhīvu URL drīkst norādīt tikai uz konkrētā
 lietotāja Chess.com mēneša arhīvu.
+
+## Pēc repozitorija atjaunināšanas (Prisma)
+
+`prisma/schema.prisma`, ģenerētais Prisma klients un datubāzes migrācijas ir jāsaskaņo.
+Ja shēma mainīta pēc `git pull`, esošais `generated/prisma` klients vēl var saturēt vecās atslēgas.
+Piemēram, `Opening` tagad izmanto `@@unique([eco, name])`, tāpēc seed kodā jālieto
+`where: { eco_name: { eco, name } }`.
+
+Palaidiet backend mapē ar savu konfigurēto `.env`:
+
+```powershell
+npm ci
+npm run prisma:generate
+npx prisma migrate deploy
+npm run start:dev
+```
+
+`npm run build`, `npm start`, `npm run start:dev` un `npm run start:debug` automātiski ģenerē
+Prisma klientu pirms kompilācijas. Migrācijas netiek automātiski palaistas pie starta.
+`npm run seed:openings` izpilda publisko ECO datu seed; palaidiet to pēc migrācijām, ja
+vajadzīgi atvērumu kataloga dati. Seed nav jāpalaiž katrā starta reizē.
+
+ECO kods viens pats vairs nenosaka unikālu atvērumu. Imports sasaista pēc ECO un pilna
+PGN atvēruma nosaukuma (ar `Variation`, ja norādīts); ja PGN ir tikai ECO, sasaisti veic
+vienīgi tad, ja katalogā tam ir viens kandidāts. Neskaidras variācijas netiek minētas.
+Atkārtots Chess.com vai Lichess imports arī pārskata agrākās atvērumu saites tikai
+attiecīgā lietotāja partijām.
+
+Pēc `npm run build` produkcijas serveri palaiž `npm run start:prod`; šī projekta
+kompilētais ieejas fails ir `dist/src/main.js`.
 
 ## Reģistrācija un profila panelis
 

@@ -21,6 +21,15 @@ export function parsePgn(pgn: string): ParsedPgnGameFields {
   };
 }
 
+export function parsePgnOpening(pgn: string): { eco: string | null; name: string | null } {
+  const headers = readHeaders(pgn);
+  const opening = headers.Opening?.trim();
+  const variation = headers.Variation?.trim();
+  return {
+    eco: headers.ECO?.trim().toUpperCase() || null,
+    name: opening ? [opening, variation].filter(Boolean).join(': ') : null,
+  };
+}
 export function hasPgnHeader(pgn: string, headerName: string): boolean {
   return new RegExp(`^\\s*\\[(?:${headerName})\\s+"`, 'im').test(pgn);
 }

@@ -15,7 +15,7 @@ export class OpeningsService {
             ],
           }
         : undefined,
-      orderBy: { eco: 'asc' },
+      orderBy: [{ eco: 'asc' }, { name: 'asc' }],
       take: 500,
       select: {
         id: true,
