@@ -1,3 +1,4 @@
+import { SignupController } from './signup.controller';
 import { Global, Module } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
@@ -10,7 +11,7 @@ import { JwtTokens } from './jwt-tokens.service';
 @Global()
 @Module({
   imports: [PrismaModule, PassportModule.register({ session: false })],
-  controllers: [AuthController],
+  controllers: [AuthController, SignupController],
   providers: [AuthService, UserService, LocalStrategy, JwtTokens],
   exports: [JwtTokens],
 })

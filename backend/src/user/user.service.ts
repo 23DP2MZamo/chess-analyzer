@@ -13,6 +13,8 @@ import { Prisma } from '../../generated/prisma/client';
 export class UserService {
   constructor(private prismaService: PrismaService) {}
   async create(createUserDto: CreateUserDto) {
+    if (Buffer.byteLength(createUserDto.password, 'utf8') > 72)
+      throw new BadRequestException('Password must be at most 72 bytes');
     const username = createUserDto.username.trim();
 
     const email = createUserDto.email.trim().toLowerCase();

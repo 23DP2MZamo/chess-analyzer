@@ -1,3 +1,4 @@
+import { setAccessCookie } from './access-cookie';
 import {
   Controller,
   Get,
@@ -25,13 +26,7 @@ export class AuthController {
     @Response({ passthrough: true }) res: ExpressResponse,
   ) {
     const accessToken = this.tokens.issue(req.user.id);
-    res.cookie('access_token', accessToken, {
-      httpOnly: true,
-      sameSite: 'lax',
-      secure: process.env.NODE_ENV === 'production',
-      path: '/',
-      maxAge: 60 * 60 * 1000,
-    });
+    setAccessCookie(res, accessToken);
     return { accessToken, tokenType: 'Bearer', expiresIn: 3600 };
   }
 

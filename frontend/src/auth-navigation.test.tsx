@@ -28,6 +28,18 @@ describe('Account navigation', () => {
         return { accessToken: 'test-token' };
       }
       if (path === '/accounts' || path === '/games') return [];
+      if (path.startsWith('/user/me/dashboard'))
+        return {
+          user,
+          accounts: [],
+          summary: { total: 0, wins: 0, losses: 0, draws: 0, winRate: null },
+          ratingSeries: [],
+          recentGames: [],
+        };
+      if (path === '/auth/signup') {
+        signedIn = true;
+        return { user };
+      }
       return user;
     });
   });
@@ -40,7 +52,7 @@ describe('Account navigation', () => {
     expect(await screen.findByRole('button', { name: /Pieslēgties/ })).toBeInTheDocument();
   });
 
-  it('redirects Analyze a game to login and returns to Analyze after successful login', async () => {
+  it('redirects Analyze to login and lands on Profile after successful login', async () => {
     const visitor = userEvent.setup();
     render(<App />);
     await visitor.click(screen.getByRole('link', { name: /Analyze a game/ }));
@@ -51,8 +63,8 @@ describe('Account navigation', () => {
     await visitor.type(screen.getByLabelText('Lietotājvārds vai e-pasts'), 'Player');
     await visitor.type(screen.getByLabelText('Parole'), 'test-password');
     await visitor.click(screen.getByRole('button', { name: /Pieslēgties/ }));
-    expect(await screen.findByRole('heading', { name: 'Analyze a game' })).toBeInTheDocument();
-    expect(window.location.pathname).toBe('/analyze');
+    expect(await screen.findByRole('heading', { name: 'Your profile' })).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/profile');
   });
 
   it.each(['/analyze', '/games', '/stats', '/profile'])(
@@ -108,10 +120,36 @@ describe('Account navigation', () => {
     );
   });
 
-  it('rejects external redirects and keeps valid local return paths', () => {
+  it('always uses Profile as the authentication landing page', () => {
     for (const path of ['https://evil.example', '//evil.example', '/login', '/unknown']) {
       expect(loginDestination('?redirect=' + encodeURIComponent(path))).toBe('/profile');
     }
-    expect(loginDestination('?redirect=%2Fanalyze%3Ffen%3Dtest')).toBe('/analyze?fen=test');
+    expect(loginDestination('?redirect=%2Fanalyze%3Ffen%3Dtest')).toBe('/profile');
+  });
+  it('signs a new account in automatically and opens its profile', async () => {
+    window.history.replaceState(null, '', '/signup');
+    render(<App />);
+    await userEvent.type(screen.getByLabelText('Lietotājvārds'), 'Player');
+    await userEvent.type(screen.getByLabelText('E-pasts'), 'player@example.com');
+    await userEvent.type(screen.getByLabelText('Parole', { exact: true }), 'test-password');
+    await userEvent.type(screen.getByLabelText('Apstipriniet paroli'), 'test-password');
+    await userEvent.click(screen.getByRole('button', { name: 'Izveidot kontu' }));
+    expect(await screen.findByRole('heading', { name: 'Your profile' })).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/profile');
+    expect(mockApi).toHaveBeenCalledWith(
+      '/auth/signup',
+      expect.objectContaining({ method: 'POST' }),
+    );
+    expect(mockApi).not.toHaveBeenCalledWith('/auth/signin', expect.anything());
+  });
+  it('includes Profile, Games, Analyze and Settings navigation on the analyzer', async () => {
+    signedIn = true;
+    window.history.replaceState(null, '', '/analyze');
+    render(<App />);
+    const navigation = await screen.findByRole('navigation', { name: 'Account navigation' });
+    expect(navigation).toHaveTextContent('Profile');
+    expect(navigation).toHaveTextContent('Games');
+    expect(navigation).toHaveTextContent('Analyze');
+    expect(navigation).toHaveTextContent('Settings');
   });
 });

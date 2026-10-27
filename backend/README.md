@@ -54,3 +54,22 @@ ielādi un atbrīvo importa bloķējumu. Datu unikālitāti nodrošina DB atslē
 
 API atbildes tiek pārbaudītas pirms saglabāšanas; arhīvu URL drīkst norādīt tikai uz konkrētā
 lietotāja Chess.com mēneša arhīvu.
+
+## Reģistrācija un profila panelis
+
+`POST /auth/signup` pieņem `{ username, email, password }`, izveido lietotāju un uzreiz
+izsniedz to pašu HttpOnly `access_token` sīkdatni kā `POST /auth/signin`. Frontend pēc
+reģistrācijas vai pieteikšanās atver `/profile`; konta rediģēšana atrodas `/settings`.
+Platformu kontu piesaiste un imports paliek profilā (`/profile#connections`).
+
+Aizsargātais `GET /user/me/dashboard?platform=CHESSCOM&format=BLITZ` atgriež tikai
+pašreizējā lietotāja datus. `platform` ir `CHESSCOM`, `LICHESS` vai `ALL`; `format`
+izvēlas reitinga grafika formātu, savukārt rezultātu statistika un pēdējās partijas aptver
+visus izvēlētās platformas formātus. Grafiks izmanto savas krāsas Elo no importētām rated
+partijām (līdz 60 punktiem katrai platformai), nevis dzīvo platformas reitingu.
+Dažādu platformu Elo netiek vidējots. Bez identificējama piesaistīta lietotājvārda
+partijas rezultāts ir nezināms un netiek pieskaitīts zaudējumiem.
+
+Ja aizsargāta pieprasījuma laikā redzams `Unknown field isBlocked`, jāatjaunina Prisma
+klients un migrācijas ar iepriekšējās sadaļas komandām un jāpārstartē backend process.
+`isBlocked` jāpaliek autentifikācijas pārbaudē, lai bloķēti konti nevarētu piekļūt sistēmai.

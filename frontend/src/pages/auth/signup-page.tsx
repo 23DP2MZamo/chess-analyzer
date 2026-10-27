@@ -1,3 +1,4 @@
+import { loginDestination } from '../../lib/login-destination';
 import { useState, type FormEvent } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { api, ApiError } from '../../lib/api';
@@ -36,8 +37,11 @@ export default function SignupPage() {
     setPending(true);
     setError('');
     try {
-      await api('/user', { method: 'POST', body: JSON.stringify({ username, email, password }) });
-      navigate('/login' + location.search);
+      await api('/auth/signup', {
+        method: 'POST',
+        body: JSON.stringify({ username, email, password }),
+      });
+      navigate(loginDestination(location.search), { replace: true });
     } catch (caughtError) {
       setError(
         caughtError instanceof ApiError
