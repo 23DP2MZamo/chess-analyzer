@@ -40,6 +40,74 @@ describe('PostgreSQL profile and duplicate prevention', () => {
     await sql.end();
   });
 
+  it('persists Chess.com months, skips duplicates and preserves earlier months on API failure', async () => {
+    let reachedEnd = false;
+    try {
+      await db.$transaction(
+        async (tx) => {
+          const id = randomUUID();
+          await tx.user.create({
+            data: {
+              id,
+              username: 'chesscom-' + id,
+              email: id + '@example.com',
+              passwordHash: 'fixture',
+            },
+          });
+          await tx.linkedAccount.create({
+            data: {
+              userId: id,
+              platform: 'CHESSCOM',
+              platformUsername: 'TestPlayer',
+            },
+          });
+          const game = {
+            uuid: 'chesscom-' + randomUUID(),
+            pgn: '[Result "1-0"]',
+            white: { username: 'TestPlayer', result: 'win', rating: 1500 },
+            black: { username: 'Opponent', result: 'resigned', rating: 1400 },
+            end_time: 1700000000,
+            rated: true,
+            time_class: 'blitz',
+          };
+          const chesscom = {
+            getGameArchives: jest.fn().mockResolvedValue({ archives: ['01', '02'] }),
+            getArchiveGames: jest
+              .fn()
+              .mockResolvedValueOnce({ games: [game] })
+              .mockRejectedValueOnce(new Error('upstream unavailable')),
+          };
+          const service = new GamesService(
+            tx as unknown as PrismaService,
+            chesscom as unknown as ChessComClient,
+            {} as LichessClient,
+          );
+          await expect(service.importChessComGames(id)).rejects.toThrow('upstream unavailable');
+          expect(await tx.game.count({ where: { userId: id } })).toBe(1);
+          chesscom.getArchiveGames
+            .mockResolvedValueOnce({ games: [game] })
+            .mockResolvedValueOnce({ games: [{ ...game, uuid: game.uuid + '-second' }] });
+          expect(await service.importChessComGames(id)).toEqual({ imported: 1, skipped: 1 });
+          const saved = await tx.game.findMany({ where: { userId: id } });
+          expect(saved).toHaveLength(2);
+          expect(saved[0]).toMatchObject({
+            userId: id,
+            platform: 'CHESSCOM',
+            pgn: game.pgn,
+            whiteElo: 1500,
+            result: 'WHITE_WIN',
+          });
+          reachedEnd = true;
+          throw rollback;
+        },
+        { timeout: 20000 },
+      );
+    } catch (error) {
+      if (error !== rollback) throw error;
+    }
+    expect(reachedEnd).toBe(true);
+  }, 30000);
+
   it('persists a profile and deduplicates games separately for each owner', async () => {
     const ids: string[] = [];
     let reachedEnd = false;

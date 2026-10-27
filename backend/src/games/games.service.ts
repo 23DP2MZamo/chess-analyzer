@@ -2,11 +2,13 @@ import { randomUUID } from 'node:crypto';
 import {
   BadRequestException,
   ConflictException,
+  HttpException,
   Injectable,
   NotFoundException,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import { Platform, Prisma } from '../../generated/prisma/client';
-import { ChessComClient, type ChessComArchiveResponse } from '../accounts/chesscom.client';
+import { ChessComClient, type ChessComGame } from '../accounts/chesscom.client';
 import { LichessClient } from '../accounts/lichess.client';
 import { PrismaService } from '../prisma/prisma.service';
 import { mapChessComGame } from './chesscom-game.mapper';
@@ -14,7 +16,6 @@ import { parsePgn } from './pgn.parser';
 import { mapLichessGame } from './lichess-game.mapper';
 
 const INSERT_BATCH_SIZE = 100;
-const ARCHIVE_FETCH_BATCH_SIZE = 5;
 
 @Injectable()
 export class GamesService {
@@ -118,54 +119,84 @@ export class GamesService {
   }
 
   async importChessComGames(userId: string): Promise<{ imported: number; skipped: number }> {
-    const linkedAccount = await this.prismaService.linkedAccount.findFirst({
-      where: {
-        userId,
-        platform: Platform.CHESSCOM,
-      },
-    });
-
-    if (!linkedAccount) {
-      throw new NotFoundException('No Chess.com account is linked');
-    }
-
-    const { archives } = await this.chessComClient.getGameArchives(linkedAccount.platformUsername);
-
-    const archiveResponses: ChessComArchiveResponse[] = [];
-
-    for (let offset = 0; offset < archives.length; offset += ARCHIVE_FETCH_BATCH_SIZE) {
-      const batch = await Promise.all(
-        archives
-          .slice(offset, offset + ARCHIVE_FETCH_BATCH_SIZE)
-          .map((archiveUrl) => this.chessComClient.getArchiveGames(archiveUrl)),
-      );
-
-      archiveResponses.push(...batch);
-    }
-
-    const games = archiveResponses.flatMap((archive) => archive.games);
-    let imported = 0;
-
-    for (let offset = 0; offset < games.length; offset += INSERT_BATCH_SIZE) {
-      const data = games
-        .slice(offset, offset + INSERT_BATCH_SIZE)
-        .map((game) => mapChessComGame(userId, game));
-
-      const result = await this.prismaService.game.createMany({
-        data,
-        skipDuplicates: true,
+    if (this.activeImports.has(userId)) throw new ConflictException('An import is already running');
+    this.activeImports.add(userId);
+    try {
+      const linkedAccount = await this.prismaService.linkedAccount.findFirst({
+        where: {
+          userId,
+          platform: Platform.CHESSCOM,
+        },
       });
 
-      imported += result.count;
+      if (!linkedAccount) {
+        throw new NotFoundException('No Chess.com account is linked');
+      }
+
+      const { archives } = await this.chessComClient.getGameArchives(
+        linkedAccount.platformUsername,
+      );
+
+      let imported = 0;
+      let skipped = 0;
+
+      for (const archiveUrl of [...new Set(archives)].sort()) {
+        let games: ChessComGame[];
+        try {
+          ({ games } = await this.chessComClient.getArchiveGames(archiveUrl));
+        } catch (error) {
+          if (error instanceof HttpException) {
+            const response = error.getResponse();
+            throw new HttpException(
+              {
+                ...(typeof response === 'string' ? { message: response } : response),
+                failedArchive: archiveUrl,
+                imported,
+                skipped,
+              },
+              error.getStatus(),
+            );
+          }
+          throw error;
+        }
+        // Persist this month before requesting the next one. A retry safely skips saved games.
+        for (let offset = 0; offset < games.length; offset += INSERT_BATCH_SIZE) {
+          const data = games
+            .slice(offset, offset + INSERT_BATCH_SIZE)
+            .map((game) => mapChessComGame(userId, game));
+
+          let result: { count: number };
+          try {
+            result = await this.prismaService.game.createMany({
+              data,
+              skipDuplicates: true,
+            });
+          } catch {
+            throw new ServiceUnavailableException({
+              statusCode: 503,
+              message:
+                'Unable to save Chess.com games. Previously saved games are kept; please retry the import.',
+              failedArchive: archiveUrl,
+              imported,
+              skipped,
+            });
+          }
+
+          imported += result.count;
+          skipped += data.length - result.count;
+        }
+      }
+
+      // Piesaista atvērumus gan jaunajām, gan agrāk importētajām spēlēm.
+      await this.linkOpenings(userId);
+
+      return {
+        imported,
+        skipped,
+      };
+    } finally {
+      this.activeImports.delete(userId);
     }
-
-    // Piesaista atvērumus gan jaunajām, gan agrāk importētajām spēlēm.
-    await this.linkOpenings(userId);
-
-    return {
-      imported,
-      skipped: games.length - imported,
-    };
   }
 
   private async linkOpenings(userId: string): Promise<void> {

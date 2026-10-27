@@ -1,4 +1,4 @@
-import { NotFoundException } from '@nestjs/common';
+import { BadGatewayException, NotFoundException } from '@nestjs/common';
 import { Platform, Prisma } from '../../generated/prisma/client';
 import { ChessComClient } from '../accounts/chesscom.client';
 import { LichessClient } from '../accounts/lichess.client';
@@ -125,7 +125,7 @@ describe('GamesService', () => {
     );
   });
 
-  it('fetches archive games in bounded batches', async () => {
+  it('fetches monthly archives strictly sequentially', async () => {
     let activeRequests = 0;
     let maxActiveRequests = 0;
     const archives = Array.from({ length: 12 }, (_, index) => `archive-${index}`);
@@ -145,7 +145,70 @@ describe('GamesService', () => {
     });
 
     expect(chessComClient.getArchiveGames).toHaveBeenCalledTimes(archives.length);
-    expect(maxActiveRequests).toBe(5);
+    expect(maxActiveRequests).toBe(1);
+  });
+
+  it('saves each month before fetching the next, sorts months and removes duplicate URLs', async () => {
+    const jan = 'https://api.chess.com/pub/player/hikaru/games/2026/01';
+    const feb = 'https://api.chess.com/pub/player/hikaru/games/2026/02';
+    const events: string[] = [];
+    prismaService.linkedAccount.findFirst.mockResolvedValue({ platformUsername: 'Hikaru' });
+    chessComClient.getGameArchives.mockResolvedValue({ archives: [feb, jan, jan] });
+    chessComClient.getArchiveGames.mockImplementation((url: string) => {
+      events.push(url);
+      return { games: Array.from({ length: 101 }, (_, i) => ({ ...chessGame, uuid: url + i })) };
+    });
+    prismaService.game.createMany.mockImplementation(({ data }: { data: unknown[] }) => {
+      events.push('save:' + data.length);
+      return { count: data.length };
+    });
+    expect(await service.importChessComGames('user')).toEqual({ imported: 202, skipped: 0 });
+    expect(events).toEqual([jan, 'save:100', 'save:1', feb, 'save:100', 'save:1']);
+  });
+
+  it('reports a failed month, retains prior writes and releases the lock for retry', async () => {
+    prismaService.linkedAccount.findFirst.mockResolvedValue({ platformUsername: 'Hikaru' });
+    chessComClient.getGameArchives.mockResolvedValue({ archives: ['01', '02', '03'] });
+    chessComClient.getArchiveGames
+      .mockResolvedValueOnce({ games: [chessGame] })
+      .mockRejectedValueOnce(new BadGatewayException('Invalid archive'));
+    prismaService.game.createMany.mockResolvedValue({ count: 1 });
+    await expect(service.importChessComGames('user')).rejects.toMatchObject({
+      response: {
+        statusCode: 502,
+        message: 'Invalid archive',
+        failedArchive: '02',
+        imported: 1,
+        skipped: 0,
+      },
+    });
+    expect(prismaService.game.createMany).toHaveBeenCalledTimes(1);
+    expect(chessComClient.getArchiveGames).toHaveBeenCalledTimes(2);
+    chessComClient.getGameArchives.mockResolvedValue({ archives: [] });
+    expect(await service.importChessComGames('user')).toEqual({ imported: 0, skipped: 0 });
+  });
+
+  it('rejects overlapping Chess.com imports and releases the lock after database failure', async () => {
+    let finish!: (value: { archives: string[] }) => void;
+    prismaService.linkedAccount.findFirst.mockResolvedValue({ platformUsername: 'Hikaru' });
+    chessComClient.getGameArchives.mockReturnValue(
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+    );
+    const first = service.importChessComGames('user');
+    await Promise.resolve();
+    await expect(service.importChessComGames('user')).rejects.toMatchObject({ status: 409 });
+    finish({ archives: ['01', '02'] });
+    chessComClient.getArchiveGames.mockResolvedValue({ games: [chessGame] });
+    prismaService.game.createMany.mockRejectedValueOnce(new Error('database unavailable'));
+    await expect(first).rejects.toMatchObject({
+      status: 503,
+      response: { failedArchive: '01', imported: 0, skipped: 0 },
+    });
+    expect(chessComClient.getArchiveGames).toHaveBeenCalledTimes(1);
+    chessComClient.getGameArchives.mockResolvedValue({ archives: [] });
+    expect(await service.importChessComGames('user')).toEqual({ imported: 0, skipped: 0 });
   });
 
   it('imports only the requested latest games with the correct user and compound key', async () => {
