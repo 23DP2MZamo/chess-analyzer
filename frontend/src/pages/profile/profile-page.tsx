@@ -1,375 +1,334 @@
-import { useEffect, useState, type FormEvent } from 'react';
-import { Link } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { Link, useLocation, useSearchParams } from 'react-router-dom';
+import LinkedAccountsPanel, { type LinkedAccount } from '../../components/linked-accounts-panel';
+import RatingChart, { type RatingSeries } from '../../components/rating-chart';
+import ArrowIcon from '../../components/arrow-icon';
 import { api, ApiError } from '../../lib/api';
-
-type Profile = {
+type RecentGame = {
   id: string;
-  username: string;
-  email: string;
-  role: string;
+  platform: string;
+  opponent: string;
+  opponentRating: number | null;
+  outcome: 'WIN' | 'LOSS' | 'DRAW' | 'UNKNOWN';
+  format: string;
+  mode: string;
+  timeControl: string | null;
+  playedAt: string;
+  moveCount: number | null;
+  opening: { eco: string | null; name: string | null } | null;
 };
-
-type LinkedAccount = {
-  id: string;
-  platform: 'CHESSCOM' | 'LICHESS';
-  platformUsername: string;
-  connectedAt: string;
+type Dashboard = {
+  user: { id: string; username: string; createdAt: string; role: string };
+  accounts: LinkedAccount[];
+  summary: { total: number; wins: number; losses: number; draws: number; winRate: number | null };
+  ratingSeries: RatingSeries[];
+  recentGames: RecentGame[];
 };
-
-type FormValues = {
-  username: string;
-  email: string;
-  password: string;
-};
-
-const emptyForm: FormValues = { username: '', email: '', password: '' };
-
-function validate(values: FormValues) {
-  if (values.username.trim().length > 50) return 'Lietotājvārdam jābūt līdz 50 rakstzīmēm.';
-  if (values.email.trim().length > 254) return 'E-pasta adrese ir pārāk gara.';
-  if (new TextEncoder().encode(values.password).length > 72)
-    return 'Parolei jābūt līdz 72 baitiem.';
-  if (values.username.trim().length < 3) return 'Lietotājvārdam jābūt vismaz 3 rakstzīmes garam.';
-  if (!/^\S+@\S+\.\S+$/.test(values.email.trim())) return 'Ievadiet derīgu e-pasta adresi.';
-  if (values.password && values.password.length < 7)
-    return 'Parolei jābūt vismaz 7 rakstzīmes garai.';
-  return '';
-}
-
+const platformNames = { CHESSCOM: 'Chess.com', LICHESS: 'Lichess', ALL: 'Global' };
+const results = { WIN: 'Win', LOSS: 'Loss', DRAW: 'Draw', UNKNOWN: 'Unidentified player' };
 export default function ProfilePage() {
-  const [form, setForm] = useState<FormValues>(emptyForm);
-  const [saved, setSaved] = useState<FormValues>(emptyForm);
-  const [loading, setLoading] = useState(true);
-  const [pending, setPending] = useState(false);
-  const [profile, setProfile] = useState<Profile | null>(null);
-  const [reload, setReload] = useState(0);
-  const [accountsLoading, setAccountsLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
-  const [linkedAccounts, setLinkedAccounts] = useState<LinkedAccount[]>([]);
-  const [accountUsername, setAccountUsername] = useState('');
-  const [accountPlatform, setAccountPlatform] = useState<LinkedAccount['platform']>('CHESSCOM');
-  const [accountPending, setAccountPending] = useState(false);
-  const [accountError, setAccountError] = useState('');
-  const [accountSuccess, setAccountSuccess] = useState('');
-
+  const [params, setParams] = useSearchParams();
+  const location = useLocation();
+  const platform =
+    params.get('platform') && Object.hasOwn(platformNames, params.get('platform')!)
+      ? params.get('platform')!
+      : 'CHESSCOM';
+  const format = ['BULLET', 'BLITZ', 'RAPID', 'CLASSICAL', 'CORRESPONDENCE'].includes(
+    params.get('format') ?? '',
+  )
+    ? params.get('format')!
+    : 'BLITZ';
+  const [revision, setRevision] = useState(0);
+  const [notice, setNotice] = useState('');
+  const [response, setResponse] = useState<{
+    key: string;
+    data?: Dashboard;
+    error?: string;
+  } | null>(null);
+  const key = platform + ':' + format + ':' + revision;
+  const data = response?.key === key ? response.data : undefined;
+  const loading = response?.key !== key;
   useEffect(() => {
     let active = true;
-    api<Profile>('/user/me')
-      .then((profile) => {
-        if (!active) return;
-        setProfile(profile);
-        const values = { username: profile.username, email: profile.email, password: '' };
-        setForm(values);
-        setSaved(values);
+    api<Dashboard>(`/user/me/dashboard?platform=${platform}&format=${format}`)
+      .then((value) => {
+        if (active) setResponse({ key, data: value });
       })
-      .catch((caughtError) => {
-        if (active) {
-          setError(
-            caughtError instanceof ApiError ? caughtError.message : 'Neizdevās ielādēt profilu.',
-          );
-        }
-      })
-      .finally(() => {
-        if (active) setLoading(false);
+      .catch((caught) => {
+        if (active)
+          setResponse({
+            key,
+            error:
+              caught instanceof ApiError
+                ? caught.message
+                : 'Could not load your profile. Try again.',
+          });
       });
     return () => {
       active = false;
     };
-  }, [reload]);
-
+  }, [platform, format, key]);
   useEffect(() => {
-    let active = true;
-    api<LinkedAccount[]>('/accounts')
-      .then((accounts) => {
-        if (active) setLinkedAccounts(accounts);
-      })
-      .catch((caughtError) => {
-        if (!active) return;
-        setAccountError(
-          caughtError instanceof ApiError
-            ? caughtError.message
-            : 'Neizdevās ielādēt piesaistītos kontus.',
-        );
-      })
-      .finally(() => {
-        if (active) setAccountsLoading(false);
-      });
-    return () => {
-      active = false;
-    };
-  }, []);
-
-  const dirty =
-    form.username !== saved.username || form.email !== saved.email || form.password !== '';
-  const validationError = validate(form);
-
-  function updateField(field: keyof FormValues, value: string) {
-    setForm((current) => ({ ...current, [field]: value }));
-    setError('');
-    setSuccess('');
+    if (data && location.hash === '#connections') {
+      const target = document.getElementById('connections');
+      target?.scrollIntoView?.({ block: 'start' });
+      target?.focus({ preventScroll: true });
+    }
+  }, [data, location.hash]);
+  function change(name: string, value: string) {
+    setParams((current) => {
+      const next = new URLSearchParams(current);
+      next.set(name, value);
+      return next;
+    });
   }
-
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (pending || loading || !profile) return;
-    if (!dirty || validationError) {
-      setError(validationError || 'Nav neizmainītu datu, ko saglabāt.');
-      return;
-    }
-
-    setPending(true);
-    setError('');
-    setSuccess('');
-    try {
-      const updated = await api<Profile>('/user/me', {
-        method: 'PATCH',
-        body: JSON.stringify({
-          username: form.username.trim(),
-          email: form.email.trim(),
-          ...(form.password ? { password: form.password } : {}),
-        }),
-      });
-      const values = { username: updated.username, email: updated.email, password: '' };
-      setProfile(updated);
-      setForm(values);
-      setSaved(values);
-      setSuccess('Profils ir veiksmīgi atjaunināts.');
-    } catch (caughtError) {
-      setError(
-        caughtError instanceof ApiError ? caughtError.message : 'Neizdevās saglabāt izmaiņas.',
-      );
-    } finally {
-      setPending(false);
-    }
-  }
-
-  async function handleLinkAccount(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (accountPending || accountsLoading || !profile) return;
-    const username = accountUsername.trim();
-    if (!username) {
-      setAccountError('Ievadiet ārējās platformas lietotājvārdu.');
-      return;
-    }
-
-    setAccountPending(true);
-    setAccountError('');
-    setAccountSuccess('');
-    try {
-      const linked = await api<LinkedAccount>(
-        `/accounts/${accountPlatform === 'CHESSCOM' ? 'chesscom' : 'lichess'}`,
-        {
-          method: 'POST',
-          body: JSON.stringify({ username }),
-        },
-      );
-      setLinkedAccounts((current) => [...current, linked]);
-      setAccountUsername('');
-      setAccountSuccess(
-        `${accountPlatform === 'CHESSCOM' ? 'Chess.com' : 'Lichess'} konts ir piesaistīts.`,
-      );
-    } catch (caughtError) {
-      setAccountError(
-        caughtError instanceof ApiError ? caughtError.message : 'Neizdevās piesaistīt kontu.',
-      );
-    } finally {
-      setAccountPending(false);
-    }
-  }
-
+  const account = data?.accounts.find((item) => item.platform === platform);
   return (
-    <main className="min-h-screen bg-[#202020] font-sans text-stone-100">
-      <section className="mx-auto grid w-full max-w-5xl gap-10 px-5 py-12 sm:px-8 lg:grid-cols-[.8fr_1.2fr] lg:gap-20 lg:py-20">
-        <div className="max-w-md border-l border-[#bd5d2a]/70 pl-6">
-          <Link className="text-sm text-stone-400 no-underline hover:text-white" to="/home">
-            ← Home
+    <main className="min-h-screen bg-[#1c1b1a] px-5 py-9 font-sans text-[#eee9e2] sm:px-8 sm:py-12">
+      <div className="mx-auto max-w-5xl">
+        <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <p className="text-xs tracking-[.2em] text-[#dda077]">YOUR CHESS, IN ONE PLACE</p>
+            <h1 className="mt-3 text-4xl font-light tracking-[-.035em]">Your profile</h1>
+          </div>
+          <Link
+            to="/settings"
+            className="flex min-h-12 items-center gap-2 rounded-sm border border-white/20 px-5 text-sm text-[#cfc5b8] transition hover:border-[#e3a377] hover:text-white"
+          >
+            Account settings <ArrowIcon />
           </Link>
-          <p className="mb-5 mt-10 text-sm tracking-[.2em] text-[#d47440] uppercase">Jūsu konts</p>
-          <h1 className="text-4xl leading-none font-extralight tracking-[-.04em] text-stone-100 sm:text-6xl">
-            Profils
-          </h1>
-          <p className="mt-6 text-sm leading-relaxed text-stone-400">
-            Pārvaldiet savu konta informāciju vienuviet.
+        </div>
+        <div
+          role="tablist"
+          aria-label="Profile platform"
+          className="mb-5 flex gap-1 border-b border-white/15"
+        >
+          {Object.entries(platformNames).map(([value, label]) => (
+            <button
+              key={value}
+              role="tab"
+              type="button"
+              aria-selected={platform === value}
+              aria-controls="profile-panel"
+              onClick={() => change('platform', value)}
+              className={
+                'min-h-16 flex-1 cursor-pointer border-b-2 px-2 text-lg transition sm:text-2xl ' +
+                (platform === value
+                  ? 'border-[#e9995d] text-[#f1d3bc]'
+                  : 'border-transparent text-[#aaa298] hover:text-white')
+              }
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        {notice && (
+          <p
+            role="status"
+            className="mb-5 rounded-sm border border-emerald-400/25 bg-emerald-950/20 p-4 text-base text-emerald-100"
+          >
+            {notice}
           </p>
-        </div>
-        <div className="border border-white/10 bg-[#1c1c1c] p-5 shadow-2xl shadow-black/20 sm:p-8">
-          <div className="mb-7 flex items-center justify-between border-b border-white/10 pb-4">
-            <span className="text-sm tracking-[.16em] text-stone-400 uppercase">
-              Konta informācija
-            </span>
-            <span className="size-1.5 rounded-full bg-[#dc6930] shadow-[0_0_10px_#dc6930]" />
-          </div>
-          {loading ? (
-            <p className="py-12 text-center text-sm text-stone-500" role="status">
-              Ielādējam profilu...
+        )}
+        {loading ? (
+          <p role="status" className="min-h-64 py-20 text-center text-base text-[#ccc2b4]">
+            Loading your profile…
+          </p>
+        ) : !data ? (
+          <div className="my-8 rounded-sm border border-red-400/30 p-6">
+            <p role="alert" className="text-red-200">
+              {response?.error}
             </p>
-          ) : !profile ? (
-            <div className="grid gap-4 py-8">
-              <p className="text-sm text-red-200" role="alert">
-                {error}
-              </p>
-              <Link to="/login" className="text-sm text-[#d47440]">
-                Pieslēgties
-              </Link>
-              <button
-                type="button"
-                onClick={() => {
-                  setLoading(true);
-                  setError('');
-                  setReload((value) => value + 1);
-                }}
-                className="min-h-12 border border-white/20 px-4"
-              >
-                Mēģināt vēlreiz
-              </button>
-            </div>
-          ) : (
-            <form className="grid gap-5" onSubmit={handleSubmit} noValidate aria-busy={pending}>
-              <p className="text-sm text-stone-400">Loma: {profile.role}</p>
-              <fieldset disabled={pending} className="grid min-w-0 gap-5">
-                <label className="grid gap-2 text-sm text-stone-300">
-                  Lietotājvārds
-                  <input
-                    className="min-h-12 rounded-md border border-white/10 bg-black/15 px-4 text-stone-100 outline-none focus:border-[#bd5d2a]"
-                    value={form.username}
-                    onChange={(event) => updateField('username', event.target.value)}
-                    minLength={3}
-                    required
-                  />
-                </label>
-                <label className="grid gap-2 text-sm text-stone-300">
-                  E-pasts
-                  <input
-                    className="min-h-12 rounded-md border border-white/10 bg-black/15 px-4 text-stone-100 outline-none focus:border-[#bd5d2a]"
-                    type="email"
-                    value={form.email}
-                    onChange={(event) => updateField('email', event.target.value)}
-                    required
-                  />
-                </label>
-                <label className="grid gap-2 text-sm text-stone-300">
-                  Jauna parole{' '}
-                  <span className="text-sm text-stone-500">Atstājiet tukšu, lai nemainītu</span>
-                  <input
-                    className="min-h-12 rounded-md border border-white/10 bg-black/15 px-4 text-stone-100 outline-none focus:border-[#bd5d2a]"
-                    type="password"
-                    value={form.password}
-                    onChange={(event) => updateField('password', event.target.value)}
-                    minLength={7}
-                    autoComplete="new-password"
-                  />
-                </label>
-                {dirty && validationError && (
-                  <p id="profile-validation" className="text-sm text-red-200" role="alert">
-                    {validationError}
-                  </p>
-                )}
-                {error && (
-                  <p
-                    className="border border-red-400/30 bg-red-950/30 px-3 py-2.5 text-[13px] text-red-200"
-                    role="alert"
-                  >
-                    {error}
-                  </p>
-                )}
-                {success && (
-                  <p
-                    className="border border-emerald-400/30 bg-emerald-950/30 px-3 py-2.5 text-[13px] text-emerald-200"
-                    role="status"
-                  >
-                    {success}
-                  </p>
-                )}
-                <button
-                  className="min-h-12 border border-[#c56531] bg-[#a94e22] px-5 text-sm font-medium text-white transition hover:bg-[#c25d2a] disabled:cursor-not-allowed disabled:opacity-50"
-                  type="submit"
-                  disabled={pending || !dirty || Boolean(validationError)}
-                >
-                  {pending ? 'Saglabā...' : 'Saglabāt izmaiņas'}{' '}
-                  <span className="ml-3 text-lg font-light" aria-hidden="true">
-                    →
-                  </span>
-                </button>
-              </fieldset>
-            </form>
-          )}
-        </div>
-        <div className="border border-white/10 bg-[#1c1c1c] p-5 shadow-2xl shadow-black/20 sm:p-8 lg:col-span-2">
-          <div className="mb-7 flex items-center justify-between border-b border-white/10 pb-4">
-            <span className="text-sm tracking-[.16em] text-stone-400 uppercase">
-              Piesaistītie konti
-            </span>
-            <span className="text-sm text-stone-600">Chess.com / Lichess</span>
+            <button
+              className="mt-4 min-h-12 border border-white/25 px-5"
+              onClick={() => setRevision((value) => value + 1)}
+            >
+              Try again
+            </button>
           </div>
-          <div className="grid gap-8 lg:grid-cols-[1fr_1.2fr]">
-            <div className="grid gap-3">
-              {accountsLoading ? (
-                <p className="text-sm text-stone-500" role="status">
-                  Ielādējam piesaistītos kontus...
-                </p>
-              ) : linkedAccounts.length === 0 ? (
-                <p className="text-sm text-stone-500">Nav piesaistītu ārējo kontu.</p>
-              ) : (
-                linkedAccounts.map((account) => (
+        ) : (
+          <>
+            <section
+              id="profile-panel"
+              role="tabpanel"
+              aria-label={platformNames[platform as keyof typeof platformNames] + ' profile'}
+              className="rounded-md border border-white/15 bg-[#22211f] p-5 sm:p-7"
+            >
+              <div className="flex flex-wrap items-start justify-between gap-5">
+                <div className="flex items-center gap-4">
                   <div
-                    className="flex items-center justify-between border border-white/8 px-4 py-3"
-                    key={account.id}
+                    aria-hidden="true"
+                    className="flex size-14 shrink-0 items-center justify-center rounded-full border border-[#b9784a]/40 bg-[#3c2d21] text-lg text-[#f6c49e]"
                   >
-                    <div>
-                      <p className="text-sm text-stone-200">
-                        {account.platform === 'CHESSCOM' ? 'Chess.com' : 'Lichess'}
-                      </p>
-                      <p className="text-sm text-stone-500">{account.platformUsername}</p>
-                    </div>
-                    <span className="text-sm text-emerald-400">Connected</span>
+                    {(account?.platformUsername ?? data.user.username).slice(0, 2).toUpperCase()}
                   </div>
-                ))
-              )}
-            </div>
-            <form className="grid gap-4" onSubmit={handleLinkAccount}>
-              <div className="flex gap-2">
-                {(['CHESSCOM', 'LICHESS'] as const).map((platform) => (
-                  <button
-                    className={`flex-1 border px-3 py-3 text-sm ${accountPlatform === platform ? 'border-[#bd5d2a] text-white' : 'border-white/10 text-stone-500'}`}
-                    key={platform}
-                    type="button"
-                    disabled={accountPending || !profile}
-                    onClick={() => setAccountPlatform(platform)}
+                  <div>
+                    <h2 className="break-all text-2xl font-light sm:text-3xl">
+                      {account?.platformUsername ?? data.user.username}
+                    </h2>
+                    <p className="mt-1 text-sm text-[#bfb4a5]">
+                      {platform === 'ALL'
+                        ? 'Combined imported history · all formats'
+                        : account
+                          ? `${platformNames[platform as keyof typeof platformNames]} · all formats`
+                          : `${platformNames[platform as keyof typeof platformNames]} account not connected`}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-4">
+                  {data.ratingSeries.map((series) => (
+                    <div key={series.platform} className="text-right">
+                      <p className="text-xs uppercase tracking-[.12em] text-[#c0b4a4]">
+                        {series.platform === 'CHESSCOM' ? 'Chess.com' : 'Lichess'}{' '}
+                        {format.toLowerCase()}
+                      </p>
+                      <p className="mt-1 text-3xl font-light text-[#f2ba8e]">
+                        {series.currentRating ?? '—'}{' '}
+                        <span className="text-sm text-[#bfb4a5]">Elo</span>
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="mt-7 flex flex-wrap items-end justify-between gap-3">
+                <h3 className="text-base text-[#e2d6c6]">Rating progress</h3>
+                <label className="flex items-center gap-3 text-sm text-[#bfb4a5]">
+                  Rating format
+                  <select
+                    value={format}
+                    onChange={(event) => change('format', event.target.value)}
+                    className="min-h-11 rounded-sm border border-white/20 bg-[#1b1b1a] px-3 text-sm text-[#eee]"
                   >
-                    {platform === 'CHESSCOM' ? 'Chess.com' : 'Lichess'}
-                  </button>
+                    {['BULLET', 'BLITZ', 'RAPID', 'CLASSICAL', 'CORRESPONDENCE'].map((value) => (
+                      <option key={value} value={value}>
+                        {value[0] + value.slice(1).toLowerCase()}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+              <RatingChart series={data.ratingSeries} />
+              <p className="mt-3 text-sm leading-6 text-[#b9ad9c]">
+                Latest recorded ratings from imported rated games, not live ratings.
+                {platform === 'ALL' && ' Each platform has its own rating scale.'}
+              </p>
+              <div className="mt-6 grid grid-cols-2 gap-3">
+                {[
+                  ['Games', data.summary.total],
+                  ['Wins', data.summary.wins],
+                  ['Losses', data.summary.losses],
+                  ['Draws', data.summary.draws],
+                ].map(([label, value]) => (
+                  <div
+                    key={label}
+                    className="flex flex-wrap items-baseline justify-between gap-2 rounded-sm border border-white/15 bg-[#1c1b19] px-4 py-4"
+                  >
+                    <span className="text-sm text-[#c4b9a8]">{label}</span>
+                    <span className="text-2xl font-light">{value}</span>
+                  </div>
                 ))}
               </div>
-              <input
-                className="min-h-12 rounded-md border border-white/10 bg-black/15 px-4 text-stone-100 outline-none focus:border-[#bd5d2a]"
-                value={accountUsername}
-                onChange={(event) => setAccountUsername(event.target.value)}
-                aria-label="Platformas lietotājvārds"
-                disabled={accountPending || accountsLoading || !profile}
-                placeholder="Platform username"
+              <div className="mt-5 flex flex-wrap items-center justify-between gap-3 text-sm text-[#c9bdad]">
+                <span>
+                  Win rate ·{' '}
+                  {data.summary.winRate == null
+                    ? 'No identified results yet'
+                    : `${data.summary.winRate}% of identified results`}
+                </span>
+                <a href="#connections" className="min-h-11 py-2 text-[#edb18a] hover:text-white">
+                  {account || (platform === 'ALL' && data.accounts.length)
+                    ? 'Manage connections / import games'
+                    : 'Connect account to get started'}{' '}
+                  →
+                </a>
+              </div>
+            </section>
+            <section
+              aria-labelledby="recent-title"
+              className="mt-6 rounded-md border border-white/15 bg-[#22211f] p-5 sm:p-7"
+            >
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <h2 id="recent-title" className="text-2xl font-light">
+                  Last matches
+                </h2>
+                <Link to="/games" className="min-h-11 py-2 text-sm text-[#edb18a] hover:text-white">
+                  View all games →
+                </Link>
+              </div>
+              {data.recentGames.length ? (
+                <div className="mt-3 divide-y divide-white/10">
+                  {data.recentGames.map((game) => (
+                    <Link
+                      key={game.id}
+                      to={'/analyze/games/' + encodeURIComponent(game.id)}
+                      className="group flex min-h-24 cursor-pointer items-center gap-3 rounded-sm py-4 text-[#ece4d9] transition hover:bg-white/[.04] focus-visible:outline-2 focus-visible:outline-[#eaa879] sm:gap-4"
+                    >
+                      <span
+                        aria-hidden="true"
+                        className={
+                          'h-13 w-1 shrink-0 rounded-full ' +
+                          (game.outcome === 'WIN'
+                            ? 'bg-emerald-500'
+                            : game.outcome === 'LOSS'
+                              ? 'bg-[#c84d42]'
+                              : 'bg-[#948777]')
+                        }
+                      />
+                      <span
+                        aria-hidden="true"
+                        className="flex size-11 shrink-0 items-center justify-center rounded-full bg-[#3c3933] text-sm text-[#e1d5c4]"
+                      >
+                        {game.opponent.slice(0, 2).toUpperCase()}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-base">
+                          <span className="break-all">{game.opponent}</span>{' '}
+                          <span className="text-sm text-[#b6a995]">
+                            {game.opponentRating != null ? `· ${game.opponentRating}` : ''}
+                          </span>
+                        </p>
+                        <p className="mt-1 text-sm leading-6 text-[#bfb4a4]">
+                          {game.format.toLowerCase()} ·{' '}
+                          {game.timeControl ?? game.mode.toLowerCase()} ·{' '}
+                          {[game.opening?.eco, game.opening?.name].filter(Boolean).join(' ') ||
+                            'Opening unavailable'}{' '}
+                          ·{' '}
+                          {game.moveCount == null ? 'Moves unavailable' : `${game.moveCount} moves`}
+                        </p>
+                        <p className="mt-1 text-xs text-[#ac9e8a]">
+                          {results[game.outcome]} ·{' '}
+                          {game.platform === 'CHESSCOM' ? 'Chess.com' : 'Lichess'} ·{' '}
+                          {new Date(game.playedAt).toLocaleDateString()}
+                        </p>
+                      </div>
+                      <span className="flex shrink-0 items-center gap-2 pr-2 text-sm text-[#edb18a]">
+                        <span className="hidden sm:inline">Analyze</span>
+                        <ArrowIcon />
+                      </span>
+                    </Link>
+                  ))}
+                </div>
+              ) : (
+                <div className="py-8 text-base leading-7 text-[#c9beae]">
+                  <p>No imported matches for this platform yet.</p>
+                  <p className="mt-2">
+                    Connect your account below, then import your games to see your progress here.
+                  </p>
+                </div>
+              )}
+            </section>
+            <div className="mt-6">
+              <LinkedAccountsPanel
+                accounts={data.accounts}
+                onChanged={(message) => {
+                  setNotice(message);
+                  setRevision((value) => value + 1);
+                }}
               />
-              {accountError && (
-                <p className="text-sm text-red-300" role="alert">
-                  {accountError}
-                </p>
-              )}
-              {accountSuccess && (
-                <p className="text-sm text-emerald-300" role="status">
-                  {accountSuccess}
-                </p>
-              )}
-              <button
-                className="min-h-12 border border-[#c56531] bg-[#a94e22] px-5 text-sm text-white disabled:opacity-50"
-                type="submit"
-                disabled={accountPending || accountsLoading || !profile || !accountUsername.trim()}
-              >
-                {accountPending ? 'Checking...' : 'Connect account'}
-              </button>
-            </form>
-          </div>
-        </div>
-      </section>
+            </div>
+          </>
+        )}
+      </div>
     </main>
   );
 }

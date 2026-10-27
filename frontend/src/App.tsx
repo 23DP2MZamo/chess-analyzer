@@ -1,3 +1,4 @@
+import SettingsPage from './pages/profile/settings-page';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import MainLayout from './layouts/base-layout1';
 import RequireAuth from './layouts/require-auth';
@@ -23,6 +24,7 @@ function App() {
           <Route path="/home" element={<User />} />
           <Route element={<RequireAuth />}>
             <Route path="/profile" element={<ProfilePage />} />
+            <Route path="/settings" element={<SettingsPage />} />
             <Route path="/analyze" element={<ToolPage />} />
             <Route path="/analyze/games/:gameId" element={<GameReviewPage />} />
             <Route path="/games" element={<GamesPage />} />

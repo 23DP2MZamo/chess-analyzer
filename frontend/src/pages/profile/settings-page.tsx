@@ -1,0 +1,231 @@
+import { useEffect, useState, type FormEvent } from 'react';
+import { Link } from 'react-router-dom';
+import { api, ApiError } from '../../lib/api';
+
+type Profile = {
+  id: string;
+  username: string;
+  email: string;
+  role: string;
+};
+
+type FormValues = {
+  username: string;
+  email: string;
+  password: string;
+};
+
+const emptyForm: FormValues = { username: '', email: '', password: '' };
+
+function validate(values: FormValues) {
+  if (values.username.trim().length > 50) return 'Lietotājvārdam jābūt līdz 50 rakstzīmēm.';
+  if (values.email.trim().length > 254) return 'E-pasta adrese ir pārāk gara.';
+  if (new TextEncoder().encode(values.password).length > 72)
+    return 'Parolei jābūt līdz 72 baitiem.';
+  if (values.username.trim().length < 3) return 'Lietotājvārdam jābūt vismaz 3 rakstzīmes garam.';
+  if (!/^\S+@\S+\.\S+$/.test(values.email.trim())) return 'Ievadiet derīgu e-pasta adresi.';
+  if (values.password && values.password.length < 7)
+    return 'Parolei jābūt vismaz 7 rakstzīmes garai.';
+  return '';
+}
+
+export default function SettingsPage() {
+  const [form, setForm] = useState<FormValues>(emptyForm);
+  const [saved, setSaved] = useState<FormValues>(emptyForm);
+  const [loading, setLoading] = useState(true);
+  const [pending, setPending] = useState(false);
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [reload, setReload] = useState(0);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+
+  useEffect(() => {
+    let active = true;
+    api<Profile>('/user/me')
+      .then((profile) => {
+        if (!active) return;
+        setProfile(profile);
+        const values = { username: profile.username, email: profile.email, password: '' };
+        setForm(values);
+        setSaved(values);
+      })
+      .catch((caughtError) => {
+        if (active) {
+          setError(
+            caughtError instanceof ApiError ? caughtError.message : 'Neizdevās ielādēt profilu.',
+          );
+        }
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [reload]);
+
+  const dirty =
+    form.username !== saved.username || form.email !== saved.email || form.password !== '';
+  const validationError = validate(form);
+
+  function updateField(field: keyof FormValues, value: string) {
+    setForm((current) => ({ ...current, [field]: value }));
+    setError('');
+    setSuccess('');
+  }
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (pending || loading || !profile) return;
+    if (!dirty || validationError) {
+      setError(validationError || 'Nav neizmainītu datu, ko saglabāt.');
+      return;
+    }
+
+    setPending(true);
+    setError('');
+    setSuccess('');
+    try {
+      const updated = await api<Profile>('/user/me', {
+        method: 'PATCH',
+        body: JSON.stringify({
+          username: form.username.trim(),
+          email: form.email.trim(),
+          ...(form.password ? { password: form.password } : {}),
+        }),
+      });
+      const values = { username: updated.username, email: updated.email, password: '' };
+      setProfile(updated);
+      setForm(values);
+      setSaved(values);
+      setSuccess('Profils ir veiksmīgi atjaunināts.');
+    } catch (caughtError) {
+      setError(
+        caughtError instanceof ApiError ? caughtError.message : 'Neizdevās saglabāt izmaiņas.',
+      );
+    } finally {
+      setPending(false);
+    }
+  }
+
+  return (
+    <main className="min-h-screen bg-[#202020] font-sans text-stone-100">
+      <section className="mx-auto grid w-full max-w-5xl gap-10 px-5 py-12 sm:px-8 lg:grid-cols-[.8fr_1.2fr] lg:gap-20 lg:py-20">
+        <div className="max-w-md border-l border-[#bd5d2a]/70 pl-6">
+          <Link className="text-sm text-stone-400 no-underline hover:text-white" to="/profile">
+            ← Profile
+          </Link>
+          <p className="mb-5 mt-10 text-sm tracking-[.2em] text-[#d47440] uppercase">Jūsu konts</p>
+          <h1 className="text-4xl leading-none font-extralight tracking-[-.04em] text-stone-100 sm:text-6xl">
+            Iestatījumi
+          </h1>
+          <p className="mt-6 text-sm leading-relaxed text-stone-400">
+            Pārvaldiet savu konta informāciju vienuviet.
+          </p>
+        </div>
+        <div className="border border-white/10 bg-[#1c1c1c] p-5 shadow-2xl shadow-black/20 sm:p-8">
+          <div className="mb-7 flex items-center justify-between border-b border-white/10 pb-4">
+            <span className="text-sm tracking-[.16em] text-stone-400 uppercase">
+              Konta informācija
+            </span>
+            <span className="size-1.5 rounded-full bg-[#dc6930] shadow-[0_0_10px_#dc6930]" />
+          </div>
+          {loading ? (
+            <p className="py-12 text-center text-sm text-stone-500" role="status">
+              Ielādējam profilu...
+            </p>
+          ) : !profile ? (
+            <div className="grid gap-4 py-8">
+              <p className="text-sm text-red-200" role="alert">
+                {error}
+              </p>
+              <Link to="/login" className="text-sm text-[#d47440]">
+                Pieslēgties
+              </Link>
+              <button
+                type="button"
+                onClick={() => {
+                  setLoading(true);
+                  setError('');
+                  setReload((value) => value + 1);
+                }}
+                className="min-h-12 border border-white/20 px-4"
+              >
+                Mēģināt vēlreiz
+              </button>
+            </div>
+          ) : (
+            <form className="grid gap-5" onSubmit={handleSubmit} noValidate aria-busy={pending}>
+              <p className="text-sm text-stone-400">Loma: {profile.role}</p>
+              <fieldset disabled={pending} className="grid min-w-0 gap-5">
+                <label className="grid gap-2 text-sm text-stone-300">
+                  Lietotājvārds
+                  <input
+                    className="min-h-12 rounded-md border border-white/10 bg-black/15 px-4 text-stone-100 outline-none focus:border-[#bd5d2a]"
+                    value={form.username}
+                    onChange={(event) => updateField('username', event.target.value)}
+                    minLength={3}
+                    required
+                  />
+                </label>
+                <label className="grid gap-2 text-sm text-stone-300">
+                  E-pasts
+                  <input
+                    className="min-h-12 rounded-md border border-white/10 bg-black/15 px-4 text-stone-100 outline-none focus:border-[#bd5d2a]"
+                    type="email"
+                    value={form.email}
+                    onChange={(event) => updateField('email', event.target.value)}
+                    required
+                  />
+                </label>
+                <label className="grid gap-2 text-sm text-stone-300">
+                  Jauna parole{' '}
+                  <span className="text-sm text-stone-500">Atstājiet tukšu, lai nemainītu</span>
+                  <input
+                    className="min-h-12 rounded-md border border-white/10 bg-black/15 px-4 text-stone-100 outline-none focus:border-[#bd5d2a]"
+                    type="password"
+                    value={form.password}
+                    onChange={(event) => updateField('password', event.target.value)}
+                    minLength={7}
+                    autoComplete="new-password"
+                  />
+                </label>
+                {dirty && validationError && (
+                  <p id="profile-validation" className="text-sm text-red-200" role="alert">
+                    {validationError}
+                  </p>
+                )}
+                {error && (
+                  <p
+                    className="border border-red-400/30 bg-red-950/30 px-3 py-2.5 text-[13px] text-red-200"
+                    role="alert"
+                  >
+                    {error}
+                  </p>
+                )}
+                {success && (
+                  <p
+                    className="border border-emerald-400/30 bg-emerald-950/30 px-3 py-2.5 text-[13px] text-emerald-200"
+                    role="status"
+                  >
+                    {success}
+                  </p>
+                )}
+                <button
+                  className="min-h-12 border border-[#c56531] bg-[#a94e22] px-5 text-sm font-medium text-white transition hover:bg-[#c25d2a] disabled:cursor-not-allowed disabled:opacity-50"
+                  type="submit"
+                  disabled={pending || !dirty || Boolean(validationError)}
+                >
+                  {pending ? 'Saglabā...' : 'Saglabāt izmaiņas'}{' '}
+                  <span className="ml-3 text-lg font-light" aria-hidden="true">
+                    →
+                  </span>
+                </button>
+              </fieldset>
+            </form>
+          )}
+        </div>
+      </section>
+    </main>
+  );
+}

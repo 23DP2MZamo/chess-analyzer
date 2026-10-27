@@ -123,4 +123,13 @@ describe('Game history filters', () => {
     expect(screen.getByText(/These are practice games/)).toBeInTheDocument();
     expect(screen.getByText('0 matching games')).toBeInTheDocument();
   });
+  it('offers a connection shortcut when no accounts are linked', async () => {
+    mockApi.mockResolvedValue({ ...fixture, connectedAccountCount: 0 });
+    open();
+    expect(await screen.findByRole('link', { name: 'Connect account →' })).toHaveAttribute(
+      'href',
+      '/profile#connections',
+    );
+    expect(screen.getByText('No accounts connected yet?')).toBeInTheDocument();
+  });
 });

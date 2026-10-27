@@ -76,7 +76,7 @@ export class GameSearchService {
       )
       SELECT jsonb_build_object(
         'items', coalesce((SELECT jsonb_agg(to_jsonb(page) - 'ordinal' ORDER BY ordinal) FROM page), '[]'::jsonb),
-        'total', (SELECT count(*)::int FROM filtered), 'totalOwned', (SELECT count(*)::int FROM base), 'page', ${query.page}::int, 'pageSize', ${query.pageSize}::int,
+        'total', (SELECT count(*)::int FROM filtered), 'totalOwned', (SELECT count(*)::int FROM base), 'connectedAccountCount', (SELECT count(*)::int FROM linked_accounts WHERE "userId" = ${userId}), 'page', ${query.page}::int, 'pageSize', ${query.pageSize}::int,
         'groups', CASE WHEN ${query.groupBy === 'opening'} THEN coalesce((SELECT jsonb_agg(to_jsonb(groups) ORDER BY key) FROM groups), '[]'::jsonb) ELSE '[]'::jsonb END) AS result
     `);
     return rows[0].result;

@@ -27,6 +27,7 @@ type SearchResult = {
   items: Game[];
   total: number;
   totalOwned?: number;
+  connectedAccountCount?: number;
   page: number;
   pageSize: number;
   groups: { key: string; eco: string | null; name: string | null; count: number }[];
@@ -180,6 +181,22 @@ export default function GamesPage() {
           ))}
         </div>
       </header>
+      {data.connectedAccountCount === 0 && !loading && !visibleError && (
+        <aside className="mt-6 flex flex-wrap items-center justify-between gap-4 rounded-sm border border-[#d89462]/40 bg-[#30261e] p-5">
+          <div>
+            <h2 className="text-lg text-[#f2d0b4]">No accounts connected yet?</h2>
+            <p className="mt-2 text-base leading-7 text-[#cec1af]">
+              Connect your Chess.com or Lichess account to import your own games.
+            </p>
+          </div>
+          <Link
+            to="/profile#connections"
+            className="flex min-h-12 cursor-pointer items-center border border-[#d89462] bg-[#9e4d26] px-5 text-base text-white hover:bg-[#bc5b2b] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#edb18a]"
+          >
+            Connect account →
+          </Link>
+        </aside>
+      )}
       <ImportHelp />
       <section
         aria-label="Game filters"
@@ -305,7 +322,10 @@ export default function GamesPage() {
                 <p className="mt-3 text-sm text-[#c8c2b9]">
                   Adjust the filters or import games from a linked account.
                 </p>
-                <Link className="mt-5 inline-block text-sm text-[#d47440]" to="/profile">
+                <Link
+                  className="mt-5 inline-block text-sm text-[#d47440]"
+                  to="/profile#connections"
+                >
                   Manage linked accounts →
                 </Link>
               </div>
