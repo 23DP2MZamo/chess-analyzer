@@ -14,7 +14,7 @@ const prisma = new PrismaClient({ adapter });
 const BASE_URL = 'https://raw.githubusercontent.com/lichess-org/chess-openings/master';
 
 async function seedOpenings() {
-  const openings = new Map<string, string>();
+  const openings = new Map<string, { eco: string; name: string }>();
   const volumes = ['a', 'b', 'c', 'd', 'e'];
 
   for (const volume of volumes) {
@@ -37,19 +37,18 @@ async function seedOpenings() {
 
       if (!eco || !name) continue;
 
-      // Datubāzē eco ir unikāls, tāpēc saglabājam
-      // tikai pirmo ierakstu katram ECO kodam.
-      if (!openings.has(eco)) {
-        openings.set(eco, name);
+      const key = JSON.stringify([eco, name]);
+      if (!openings.has(key)) {
+        openings.set(key, { eco, name });
       }
     }
   }
 
   let processed = 0;
 
-  for (const [eco, name] of openings) {
+  for (const { eco, name } of openings.values()) {
     await prisma.opening.upsert({
-      where: { eco },
+      where: { eco_name: { eco, name } },
       update: { name },
       create: { eco, name },
     });
@@ -57,7 +56,7 @@ async function seedOpenings() {
     processed++;
   }
 
-  console.log(`ECO seed pabeigts! Apstrādāti ${processed} ECO kodi.`);
+  console.log(`ECO seed pabeigts! Apstrādātas ${processed} atvērumu kombinācijas.`);
 }
 
 seedOpenings()
