@@ -31,7 +31,7 @@ export default function AdminPage() {
   const currentUser = useOutletContext<{ id: string }>();
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [stats, setStats] = useState<AdminStats | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loadedRevision, setLoadedRevision] = useState(-1);
   const [error, setError] = useState('');
   const [actionError, setActionError] = useState('');
   const [notice, setNotice] = useState('');
@@ -39,14 +39,14 @@ export default function AdminPage() {
   const [filter, setFilter] = useState<UserFilter>('ALL');
   const [pendingUserId, setPendingUserId] = useState<string | null>(null);
   const [reload, setReload] = useState(0);
+  const loading = loadedRevision !== reload;
 
   useEffect(() => {
     let active = true;
-    setLoading(true);
-    setError('');
     Promise.all([api<AdminUser[]>('/user'), api<AdminStats>('/user/admin/stats')])
       .then(([loadedUsers, loadedStats]) => {
         if (!active) return;
+        setError('');
         setUsers(loadedUsers);
         setStats(loadedStats);
       })
@@ -54,7 +54,7 @@ export default function AdminPage() {
         if (active) setError(getErrorMessage(caughtError, 'Neizdevās ielādēt admina datus.'));
       })
       .finally(() => {
-        if (active) setLoading(false);
+        if (active) setLoadedRevision(reload);
       });
     return () => {
       active = false;
@@ -98,9 +98,7 @@ export default function AdminPage() {
 
   async function deleteUser(account: AdminUser) {
     if (
-      !window.confirm(
-        `Vai tiešām dzēst lietotāju “${account.username}”? Šo darbību nevar atsaukt.`,
-      )
+      !window.confirm(`Vai tiešām dzēst lietotāju “${account.username}”? Šo darbību nevar atsaukt.`)
     ) {
       return;
     }
@@ -154,7 +152,7 @@ export default function AdminPage() {
           </button>
         </section>
 
-        {error && (
+        {error && !loading && (
           <div className="mt-8 flex flex-wrap items-center justify-between gap-4 border border-red-400/30 bg-red-950/30 px-4 py-3 text-sm text-red-200">
             <p role="alert">{error}</p>
             <button
@@ -177,7 +175,10 @@ export default function AdminPage() {
               className={`${panelClass} relative overflow-hidden p-5 sm:p-6`}
               key={item.label}
             >
-              <span className="absolute top-3 right-5 text-4xl text-[#d47440]/25" aria-hidden="true">
+              <span
+                className="absolute top-3 right-5 text-4xl text-[#d47440]/25"
+                aria-hidden="true"
+              >
                 {item.symbol}
               </span>
               <p className="text-xs tracking-[.17em] text-stone-400 uppercase">{item.label}</p>
@@ -310,7 +311,7 @@ export default function AdminPage() {
                             <button
                               className="min-h-9 border border-white/12 px-3 text-xs text-stone-300 transition hover:border-[#c56531]/70 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
                               type="button"
-                              disabled={pendingUserId !== null || isSelf}
+                              disabled={loading || pendingUserId !== null || isSelf}
                               aria-label={`${account.isBlocked ? 'Atbloķēt' : 'Bloķēt'} ${account.username}`}
                               onClick={() => void toggleBlocked(account)}
                               title={isSelf ? 'Nevar mainīt sava konta statusu' : undefined}
@@ -320,7 +321,7 @@ export default function AdminPage() {
                             <button
                               className="min-h-9 border border-red-300/20 px-3 text-xs text-red-300 transition hover:border-red-300/60 hover:bg-red-950/30 disabled:cursor-not-allowed disabled:opacity-40"
                               type="button"
-                              disabled={pendingUserId !== null || isSelf}
+                              disabled={loading || pendingUserId !== null || isSelf}
                               aria-label={`Dzēst ${account.username}`}
                               onClick={() => void deleteUser(account)}
                               title={isSelf ? 'Nevar dzēst savu kontu' : undefined}

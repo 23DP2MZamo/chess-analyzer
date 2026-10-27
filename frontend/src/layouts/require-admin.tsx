@@ -1,3 +1,4 @@
+import SiteNav from '../components/site-nav';
 import { useState } from 'react';
 import { Link, Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useCurrentUser } from '../lib/use-current-user';
@@ -33,7 +34,13 @@ export default function RequireAdmin() {
   }
 
   if (access.status === 'authenticated') {
-    if (access.user?.role === 'ADMIN') return <Outlet context={access.user} />;
+    if (access.user?.role === 'ADMIN')
+      return (
+        <>
+          <SiteNav user={access.user} />
+          <Outlet context={access.user} />
+        </>
+      );
     return (
       <main className="grid min-h-screen place-items-center bg-[#202020] px-6 font-sans text-stone-100">
         <div className="grid max-w-md gap-5 border border-white/10 bg-[#1c1c1c] p-8">

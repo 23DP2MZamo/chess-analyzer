@@ -1,3 +1,4 @@
+import ArrowIcon from '../../components/arrow-icon';
 import { useState } from 'react';
 import { Link, NavLink } from 'react-router-dom';
 import { useCurrentUser } from '../../lib/use-current-user';
@@ -244,7 +245,7 @@ export default function HomePage() {
               <span className="mt-auto text-base font-medium text-[#edb38e] transition-colors group-hover:text-white">
                 {feature.linkLabel}{' '}
                 <span className="ml-2" aria-hidden="true">
-                  ↗
+                  <ArrowIcon />
                 </span>
               </span>
             </div>

@@ -1,3 +1,4 @@
+import SiteNav from '../components/site-nav';
 import { useState } from 'react';
 import { Link, Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useCurrentUser } from '../lib/use-current-user';
@@ -34,7 +35,13 @@ export default function RequireAuth() {
     );
   }
 
-  if (access.status === 'authenticated') return <Outlet />;
+  if (access.status === 'authenticated')
+    return (
+      <>
+        <SiteNav user={access.user} />
+        <Outlet />
+      </>
+    );
 
   return (
     <main className="grid min-h-screen place-items-center bg-[#202020] px-6 font-sans text-stone-400">

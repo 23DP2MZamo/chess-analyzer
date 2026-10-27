@@ -22,6 +22,8 @@ describe('Home cards', () => {
     expect(card).toHaveAttribute('href', destination);
     expect(card.querySelector('h2')).not.toBeNull();
     expect(card.querySelector('a')).toBeNull();
+    expect(card.querySelector('svg')).not.toBeNull();
+    expect(card.textContent).not.toContain('↗');
     await userEvent.click(card.querySelector('p')!);
     expect(screen.getByText('Destination reached')).toBeInTheDocument();
   });

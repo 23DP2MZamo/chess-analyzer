@@ -122,4 +122,22 @@ describe('Admin panel', () => {
     await waitFor(() => expect(screen.queryByText('player@example.com')).not.toBeInTheDocument());
     confirm.mockRestore();
   });
+  it('recovers from an initial load error and clears the error after retry', async () => {
+    let failed = true;
+    mockApi.mockImplementation(async (path) => {
+      if (path === '/auth/protected') return admin;
+      if (path === '/user') {
+        if (failed) throw new ApiError('Temporarily unavailable', 503);
+        return [adminRow, regularUser];
+      }
+      if (path === '/user/admin/stats') return { users: 2, games: 12, analyses: 8 };
+      throw new ApiError('Unexpected request', 500);
+    });
+    openAdminPage();
+    expect(await screen.findByRole('alert')).toHaveTextContent('Temporarily unavailable');
+    failed = false;
+    await userEvent.click(screen.getByRole('button', { name: 'Mēģināt vēlreiz' }));
+    expect(await screen.findByText('player@example.com')).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
 });
