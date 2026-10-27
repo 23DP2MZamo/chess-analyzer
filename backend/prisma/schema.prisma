@@ -87,11 +87,12 @@ model LinkedAccount {
 
 model Opening {
   id   String @id @default(uuid())
-  eco  String @unique
+  eco  String
   name String
 
   games Game[]
 
+  @@unique([eco, name])
   @@map("openings")
 }
 

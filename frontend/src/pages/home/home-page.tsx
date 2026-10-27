@@ -54,6 +54,8 @@ export default function HomePage() {
   const { user } = useCurrentUser();
   const accountPath = user ? '/profile' : '/login';
   const accountLabel = user ? 'Profile' : 'Log in';
+  const navigationItems =
+    user?.role === 'ADMIN' ? ['Home', 'Analyze', 'Games', 'Admin'] : ['Home', 'Analyze', 'Games'];
 
   return (
     <main className="min-h-screen overflow-hidden bg-[#1b1b1b] bg-[radial-gradient(circle_at_70%_20%,rgba(122,79,48,0.18),transparent_32%)] font-sans text-[#e8e5df]">
@@ -71,10 +73,10 @@ export default function HomePage() {
           className="ml-auto hidden items-center gap-[34px] sm:flex"
           aria-label="Main navigation"
         >
-          {['Home', 'Analyze', 'Games'].map((item) => (
+          {navigationItems.map((item) => (
             <NavLink
               key={item}
-              to={`/${item.toLowerCase()}`}
+              to={item === 'Admin' ? '/admin' : `/${item.toLowerCase()}`}
               end={item === 'Home'}
               className={({ isActive }) =>
                 `relative text-sm tracking-[.12em] no-underline transition-colors duration-200 hover:text-[#e8e5df] ${
@@ -139,10 +141,10 @@ export default function HomePage() {
           }`}
           aria-label="Mobile navigation"
         >
-          {['Home', 'Analyze', 'Games'].map((item) => (
+          {navigationItems.map((item) => (
             <NavLink
               key={item}
-              to={`/${item.toLowerCase()}`}
+              to={item === 'Admin' ? '/admin' : `/${item.toLowerCase()}`}
               end={item === 'Home'}
               onClick={closeMenu}
               className={({ isActive }) =>
