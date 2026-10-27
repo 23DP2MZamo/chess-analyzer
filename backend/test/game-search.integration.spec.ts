@@ -6,7 +6,7 @@ import { randomUUID } from 'node:crypto';
 import { Client } from 'pg';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '../generated/prisma/client';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { GameSearchService } from '../src/games/game-search.service';
 import { SearchGamesDto } from '../src/games/search-games.dto';
@@ -44,11 +44,9 @@ describe('PostgreSQL game filters, sorting and opening groups', () => {
     await sql.connect();
     await sql.query('CREATE SCHEMA "' + schema + '"');
     await sql.query('SET search_path TO "' + schema + '"');
-    for (const name of [
-      '20260907182218_chess_migration',
-      '20261020110400_user_scoped_game_uniqueness',
-      '20261026120000_admin_user_management',
-    ]) {
+    for (const name of readdirSync(resolve(__dirname, '../prisma/migrations'))
+      .filter((name) => /^\d/.test(name))
+      .sort()) {
       await sql.query(
         readFileSync(resolve(__dirname, '../prisma/migrations', name, 'migration.sql'), 'utf8'),
       );
